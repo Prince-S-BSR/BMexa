@@ -29,3 +29,21 @@ Two different persistence levels are in play:
 - **MemPalace**: its own issue tracker has a "POSSIBLE SCAM REPO" thread and a documented false-benchmark-claims issue (#875). The PyPI package author field is literally `milla-jovovich`, matching the name in a public "how X scammed the internet" video referenced in that thread. Installed at your explicit instruction despite this. No hidden telemetry/exfiltration found in a source-level scan, and it defaults to local-only MCP (stdio, not networked) — but treat any of its output/benchmarks skeptically, and avoid `mempalace serve` (explicit remote HTTP sharing mode) unless you specifically intend to expose it to a team.
 - **claude-mem**: captures full session content (tool calls, code, prompts) which can include secrets. Its own security audit (issue #1251) flags that its local worker API is unauthenticated. It defaults to `127.0.0.1` only — never set `CLAUDE_MEM_WORKER_HOST=0.0.0.0`.
 - **Beads**: shares anonymous command-name/version/OS usage metrics by default. Opt out with `bd metrics off`.
+
+## Classification
+
+- **Design / Frontend**: Impeccable, Taste Skills, Web Design Guidelines (+ Vercel bundle)
+- **Memory / Knowledge**: claude-mem, MemPalace
+- **Task / Workflow**: Beads, Task Observer
+- **Discovery**: FindSkills
+- **Browser / Testing**: Playwright CLI
+- **Not installed**: Graphify (no canonical project exists), Image to Code (no verified canonical project), Awesome Design ×2 (wrong product / unverified curator)
+
+## Architecture recommendation for this CRM
+
+1. **Beads is the task backbone.** It's already wired into `CLAUDE.md`/`AGENTS.md` and the SessionStart hook — every future session should file and track work there, not in ad hoc TODOs.
+2. **Task Observer runs quietly alongside it**, watching sessions and proposing new skills/improvements over time — not a competing task tracker.
+3. **claude-mem is the default memory layer** (auto-injects context every session, zero extra commands). Treat **MemPalace as opt-in/experimental** given its credibility problems — mine specific things into it deliberately rather than leaving it running unattended, and don't run `mempalace serve`.
+4. **Design skills stack, they don't compete**: Impeccable audits against anti-patterns, Taste Skills sharpen subjective judgment calls, Web Design Guidelines checks objective accessibility/UX rules, and the Vercel skills apply if/when this ships on Vercel. Run them at different points in a feature's lifecycle (taste during design, guidelines + impeccable at review time) rather than all at once.
+5. **Playwright CLI** is your regression-testing/browser-automation layer once real CRM screens exist to test.
+6. **FindSkills** is a lookup tool for later — reach for it when you need a skill for something not already covered here.

@@ -115,3 +115,22 @@ The Beads managed block above defaults to "do not commit/push without being aske
 - `architect` — **Opus**. Reserved for schema/data-model design, multi-tenant access control, matching/scoring/ranking algorithms, migration strategy. Use sparingly.
 
 Prefer the Sonnet-tier agents for implementation tasks; escalate to `architect` only for decisions that are expensive to reverse.
+
+## Skill Routing Protocol (Mandatory)
+
+**Before executing any feature work, the active subagent MUST evaluate the workspace skills below and invoke the best-fit skill first.** Do not write code or perform task execution without first consulting the relevant skill(s) for the category the task falls into. This is a hard gate, not a suggestion — skipping it is a process error even if the resulting code would have been correct.
+
+| Task category | Route to |
+|---|---|
+| Memory / persistent context | `claude-mem`, MemPalace |
+| Task tracking / issue management | `bd` (beads), `task-observer` |
+| UI styling / visual design judgment | Taste Skills (`.taste-skills/`), `web-design-guidelines` |
+| Motion / animation | `animate`, `design-motion-principles` |
+| Creative layouts / full page or design-system builds | `auteur`, `genjutsu` |
+| Testing / QA | `playwright-cli`, `impeccable` |
+
+Notes:
+- `impeccable` is a design-anti-pattern/QA audit skill, not a test runner — pair it with `playwright-cli` for actual browser test execution; together they cover functional and visual/quality regression.
+- Consulting a skill means invoking it (via the `Skill` tool or its slash command) or explicitly reading its guidance before acting — not just recalling that it exists.
+- If no listed skill fits the task category, say so explicitly and proceed without one rather than silently skipping the check.
+- This protocol governs the four role subagents (`architect`, `implementer`, `test-writer`, `ui-builder`) equally — model tier does not exempt a subagent from routing.

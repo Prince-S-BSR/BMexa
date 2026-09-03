@@ -10,8 +10,13 @@
 -- RULES THIS FILE IMPLEMENTS
 --   R1  Every single table carries a tenant_id column.  NON-NEGOTIABLE.
 --   R2  RBAC uses flexible default roles — defaults ship, tenants define more.
---   R3  Entitlements are soft-stop — overage billing, not hard blocks.
---   R6  Audit log is event-based, append-only, 12 months hot.
+--   R3  Entitlements are soft-stop — overage billing to a 150% ceiling, then a
+--       hard block.
+--   R4  Sources, stages, statuses and reasons are ROWS IN MASTER TABLES, never
+--       database ENUM types.
+--   R5  Core entities carry custom_attributes jsonb from day one.
+--   R6  Audit log is event-based, append-only, 12 months hot, then archived to
+--       S3 cold storage and the partition dropped.
 --
 -- -----------------------------------------------------------------------------
 -- HOW TO READ THE COMMENTS

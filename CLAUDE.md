@@ -76,3 +76,16 @@ _Add a brief overview of your project architecture_
 ## Conventions & Patterns
 
 _Add your project-specific conventions here_
+
+## Git Policy Override
+
+The Beads managed block above defaults to "do not commit/push without being asked." **This project overrides that**: a `Stop` hook in `.claude/settings.json` automatically runs `git add -A && git commit && git push origin HEAD` after every Claude turn that changes files. This was an explicit user request — no confirmation needed before committing/pushing in this project.
+
+## Subagent Model Routing
+
+`.claude/agents/` defines role-scoped subagents so routine work runs on Sonnet and only genuinely hard decisions escalate to Opus:
+
+- `implementer`, `test-writer`, `ui-builder` — **Sonnet**. Default for CRUD, forms, tests, UI, bug fixes, refactors.
+- `architect` — **Opus**. Reserved for schema/data-model design, multi-tenant access control, matching/scoring/ranking algorithms, migration strategy. Use sparingly.
+
+Prefer the Sonnet-tier agents for implementation tasks; escalate to `architect` only for decisions that are expensive to reverse.

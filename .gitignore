@@ -10,3 +10,17 @@ entities.json
 .beads/proxieddb/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+
+# Node / monorepo (apps/web, apps/api, packages/db)
+node_modules/
+dist/
+.next/
+out/
+*.tsbuildinfo
+.turbo/
+
+# Env files — real secrets. .env.example is intentionally NOT ignored.
+.env
+.env.local
+.env.*.local
+

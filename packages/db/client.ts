@@ -45,15 +45,33 @@ export const db = drizzle(queryClient, { schema });
  * routes). It is here so Phase 1's data-access layer has one already-correct
  * choke point to build on rather than re-deriving the pattern.
  */
+// PostgreSQL's SET/SET LOCAL are utility statements, not regular queries —
+// they do not accept bind parameters ($1) over the extended query protocol at
+// all ("syntax error at or near "$1""), regardless of driver. There is no
+// parameterised way to write this statement; the value must be inlined as a
+// literal. To do that safely we validate the format strictly before ever
+// building the string — the pattern below only accepts hex digits and
+// hyphens in the canonical 8-4-4-4-12 layout, which cannot contain a quote or
+// any other character that could break out of the literal.
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function withTenantContext<T>(
   tenantId: string,
   callback: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>,
 ): Promise<T> {
+  if (!UUID_PATTERN.test(tenantId)) {
+    throw new Error(
+      `withTenantContext: tenantId must be a well-formed UUID, got: ${JSON.stringify(tenantId)}`,
+    );
+  }
+
   return db.transaction(async (tx) => {
-    // Parameterised, not string-interpolated: SET LOCAL does not accept bind
-    // parameters directly, so this uses `sql` with a literal that Postgres
-    // still validates as a well-formed UUID via the ::uuid cast below.
-    await tx.execute(sql`SET LOCAL app.current_tenant_id = ${tenantId}`);
+    // Not string-interpolated via the `sql` tag's own parameter binding —
+    // see the UUID_PATTERN comment above for why that is not possible for a
+    // SET LOCAL statement. sql.raw() inlines the value directly; safety
+    // comes entirely from the regex validation above having already run.
+    await tx.execute(sql.raw(`SET LOCAL app.current_tenant_id = '${tenantId}'`));
     return callback(tx);
   });
 }

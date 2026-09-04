@@ -101,6 +101,67 @@ END;
 $$;
 
 
+-- -----------------------------------------------------------------------------
+-- 0.3 The custom_attributes convention  (Rule R5 — custom fields from day one)
+-- -----------------------------------------------------------------------------
+-- [DECIDED, R5] Every CORE ENTITY carries:
+--
+--     custom_attributes jsonb NOT NULL DEFAULT '{}'::jsonb
+--         CHECK (jsonb_typeof(custom_attributes) = 'object')
+--
+-- WHY IT IS HERE ON DAY ONE, not added when someone asks:
+--   Every CRM customer wants fields we did not ship. In a pooled multi-tenant
+--   schema the alternatives are all worse: a per-tenant ALTER TABLE (breaks the
+--   "one schema, one migration" property that justified pooling in the first
+--   place — see architecture note §3.1), or an Entity-Attribute-Value side table
+--   (a join per field, and every query becomes a pivot). A jsonb column costs
+--   nothing until used, and retrofitting one onto a large table later means a
+--   table rewrite or a slow backfill.
+--
+-- WHAT WE ARE PAYING FOR IT, stated plainly:
+--   * The data is UNTYPED. Nothing stops '{"close_date": "not a date"}'.
+--     Validation is the application's job, driven by a per-tenant field-
+--     definition registry (a Phase 1 table — see architecture note §9.2).
+--   * The data is UNINDEXED by default. A filter on a custom attribute is a
+--     sequential scan until an index exists.
+--   * It is a dumping ground unless governed. The rule that keeps it honest:
+--     anything the PRODUCT reasons about gets a real column; custom_attributes
+--     is for what the TENANT reasons about.
+--
+-- THE STANDARD MITIGATION, deliberately not applied yet:
+--   CREATE INDEX <t>_custom_attributes_gin
+--       ON <t> USING gin (custom_attributes jsonb_path_ops);
+--   jsonb_path_ops is smaller and faster than the default operator class for
+--   the containment (@>) queries this actually serves; it does not support key-
+--   existence (?) operators, which is the trade.
+--   [OPEN] NOT created in Phase 0. A GIN index is paid on every write to serve
+--   reads nobody has issued yet, and the right target is usually a narrow
+--   expression index on the two or three keys a tenant actually filters by —
+--   which cannot be known before real query patterns exist. Revisit once the
+--   CRM business objects are live and slow-query logs say something.
+--
+-- WHICH TABLES GET IT, and why the others do not:
+--   YES — tenants (tenant-level settings/config), users (per-user profile
+--         extensions), and every R4 master table (per-tenant metadata on a
+--         lookup value: a UI colour, an external system's code).
+--   NO  — join tables (role_permissions, user_roles: they model a relationship,
+--         not an entity), permissions (a fixed vocabulary WE define, not the
+--         tenant), sessions / user_mfa_methods / user_recovery_codes (a security
+--         surface; arbitrary tenant-writable data does not belong beside
+--         credential material), feature_entitlements / usage_counters /
+--         overage_line_items (billing artifacts must stay typed and auditable —
+--         a money value in a jsonb blob is a revenue incident waiting to
+--         happen), and audit_events (its payload column is already this, and it
+--         is immutable by design).
+--
+-- [DECIDED] MANDATORY FOR THE NEXT PHASE. Phase 0 contains NO CRM business
+--   objects — contacts, companies, leads, deals, activities and notes all
+--   arrive in Phase 1. Every one of them MUST be created with this column and
+--   this CHECK. That is where the rule actually earns its keep; the Phase 0
+--   applications below exist to establish the pattern so it is copied rather
+--   than re-derived.
+
+
 -- =============================================================================
 -- 1. TENANTS
 -- =============================================================================
@@ -149,6 +210,12 @@ CREATE TABLE tenants (
     status         text NOT NULL DEFAULT 'provisioning'
                      CHECK (status IN ('provisioning','active','suspended','deactivated')),
 
+    -- [R5] Tenant-level settings and per-tenant configuration that does not
+    -- warrant a column: branding preferences, feature toggles a CSM flips,
+    -- locale/formatting defaults, integration-specific identifiers. See §0.3 for
+    -- the convention and its costs.
+    custom_attributes jsonb NOT NULL DEFAULT '{}'::jsonb,
+
     created_at     timestamptz NOT NULL DEFAULT now(),
     updated_at     timestamptz NOT NULL DEFAULT now(),
 
@@ -156,6 +223,9 @@ CREATE TABLE tenants (
     -- teardown, not a single DELETE. [OPEN] That routine is not designed yet
     -- (architecture note Q15).
     deleted_at     timestamptz,
+
+    CONSTRAINT tenants_custom_attributes_is_object
+        CHECK (jsonb_typeof(custom_attributes) = 'object'),
 
     CONSTRAINT tenants_subdomain_format CHECK (
         subdomain ~ '^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])$'
@@ -183,7 +253,8 @@ CREATE TRIGGER tenants_set_updated_at
 --       BEGIN;
 --       SET LOCAL app.current_tenant_id = '<new uuid>';
 --       INSERT INTO tenants (id, subdomain, name) VALUES ('<same uuid>', ...);
---       SELECT provision_tenant_rbac_defaults('<same uuid>');
+--       SELECT provision_tenant_rbac_defaults('<same uuid>');   -- R2, §9.1
+--       SELECT provision_tenant_master_data('<same uuid>');     -- R4, §9.2
 --       COMMIT;
 --   This means signup needs NO RLS bypass and no privileged escape hatch — which
 --   is worth protecting, since a bypass added "just for provisioning" is how
@@ -334,14 +405,54 @@ CREATE TABLE feature_entitlements (
     -- API calls per 1,000 without storing a fractional price per call.
     overage_unit_size     bigint NOT NULL DEFAULT 1 CHECK (overage_unit_size > 0),
 
-    -- [JUDGMENT] The safety valve on soft-stop. An unbounded soft limit is a
-    -- runaway invoice: a looping integration can bill a customer thousands of
-    -- dollars overnight, and that is a refund and a lost account, not revenue.
-    -- Above this many units of TOTAL usage we stop even a soft limit.
-    -- NULL = no ceiling. [OPEN] Whether ceilings are mandatory, and at what
-    -- multiple of limit_value they default, is an unresolved product/legal
-    -- question (architecture note Q4).
-    overage_hard_ceiling  bigint,
+    -- ---- THE OVERAGE CEILING (R3) -------------------------------------------
+    -- [DECIDED] Soft stop is bounded at 150% of the plan limit.
+    --   0%   .. 100% of limit_value -> normal usage, no charge beyond the plan.
+    --   100% .. 150% of limit_value -> ALLOWED, metered, billed as overage.
+    --   above 150% of limit_value   -> HARD BLOCK, with an upgrade path.
+    --
+    -- Why a ceiling exists at all: an unbounded soft limit is a runaway invoice.
+    -- A looping integration can bill a customer thousands of dollars overnight,
+    -- and that outcome is a refund and a lost account, not revenue. "We told
+    -- them in the banner" is not a defence anyone wants to make.
+    --
+    -- Why a PERCENTAGE rather than an absolute unit count: the ceiling has to
+    -- stay correct when the tenant upgrades. An absolute ceiling of 15,000
+    -- contacts set against a 10,000-contact plan becomes a hard block BELOW the
+    -- plan limit the moment the tenant moves to a 25,000 plan — the failure mode
+    -- being that a customer who just paid us more money gets blocked. A ratio
+    -- rescales with limit_value automatically and cannot develop that skew.
+    --
+    -- NOT NULL with a default: there is no "no ceiling" state to forget to fill
+    -- in. An uncapped soft limit is unrepresentable. Unlimited features are
+    -- expressed as is_unlimited/limit_value IS NULL, which makes the generated
+    -- ceiling below NULL — genuinely uncapped, but only via an explicit,
+    -- deliberate configuration rather than an omission.
+    overage_ceiling_pct   integer NOT NULL DEFAULT 150
+                            CHECK (overage_ceiling_pct >= 100),
+
+    -- The effective ceiling in usage units, derived rather than stored by hand.
+    -- [JUDGMENT] A generated column, so the hot-path entitlement check is one
+    -- plain comparison (used_value >= overage_ceiling_value) instead of
+    -- arithmetic the caller could get wrong or forget. Two callers computing
+    -- limit * pct / 100 slightly differently is exactly how a billing bug is
+    -- born.
+    -- NULL means "no ceiling applies", which happens in exactly two cases, both
+    -- correct:
+    --   * limit_value IS NULL — unlimited or flag-only features have nothing to
+    --     be a percentage of.
+    --   * soft_stop = false — a hard cap already blocks at limit_value, so
+    --     headroom above it is meaningless. Encoding that here rather than as a
+    --     CHECK on overage_ceiling_pct is deliberate: a CHECK would force every
+    --     hard-capped row to redundantly restate pct = 100 and would reject the
+    --     column's own default, which is a trap for the caller rather than a
+    --     safeguard. (Found by executing this file — see architecture note §12.)
+    overage_ceiling_value bigint
+                            GENERATED ALWAYS AS (
+                                CASE WHEN soft_stop
+                                     THEN (limit_value * overage_ceiling_pct) / 100
+                                END
+                            ) STORED,
 
     -- Provenance: did this come from the plan template or from a negotiated
     -- override? Overrides must survive plan-template backfills.
@@ -375,11 +486,16 @@ CREATE TABLE feature_entitlements (
             OR overage_unit_price IS NOT NULL
         ),
 
-    CONSTRAINT feature_entitlements_ceiling_above_limit
-        CHECK (overage_hard_ceiling IS NULL
-               OR limit_value IS NULL
-               OR overage_hard_ceiling >= limit_value)
+    -- Fat-finger guard. 150 is the policy; 15000 is a typo that would bill a
+    -- customer 100x their plan before anything stopped it.
+    CONSTRAINT feature_entitlements_ceiling_sane
+        CHECK (overage_ceiling_pct <= 1000)
 );
+
+-- [R5] Note the absence of custom_attributes on this table. It is a billing
+-- artifact: every value it holds must be typed, constrained and auditable, and
+-- a money-relevant value living in an untyped jsonb blob is a revenue incident
+-- waiting to happen. See §0.3 for the full inclusion/exclusion list.
 
 CREATE UNIQUE INDEX feature_entitlements_tenant_feature_key
     ON feature_entitlements (tenant_id, feature_key);
@@ -389,15 +505,27 @@ CREATE TRIGGER feature_entitlements_set_updated_at
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 COMMENT ON TABLE feature_entitlements IS
-'R3 soft-stop limits. Enforcement contract for the data-access layer:
+'R3 soft-stop limits, bounded at a 150% ceiling. Enforcement contract for the
+ data-access layer — this is the ONLY correct order:
    1. resolve the entitlement row for (tenant, feature_key)
-   2. read current usage from usage_counters
-   3. if usage < limit_value            -> allow
-   4. else if NOT soft_stop             -> reject, surface upgrade path
-   5. else if NOT subscription.overage_billing_enabled -> reject
-   6. else if ceiling set AND usage >= overage_hard_ceiling -> reject
-   7. else                              -> ALLOW, and meter the excess
- Steps 5 and 6 are the guardrails that keep "soft" from meaning "unbounded".';
+   2. if NOT is_enabled                 -> reject (feature not entitled)
+   3. if is_unlimited OR limit_value IS NULL -> allow
+   4. read current usage from usage_counters
+   5. if usage < limit_value            -> ALLOW, no overage
+   6. else if NOT soft_stop             -> reject, surface upgrade path
+   7. else if NOT subscription.overage_billing_enabled -> reject
+   8. else if usage >= overage_ceiling_value -> REJECT (150% hard block)
+   9. else                              -> ALLOW, and meter the excess
+ Steps 6-8 are the guardrails that keep "soft" from meaning "unbounded". Step 8
+ is the decided ceiling: a tenant may consume up to 150% of their plan limit,
+ paying overage for the band between 100% and 150%, and is hard-blocked above
+ it. The block must name the number in the error surfaced to the user — "you
+ have used 150% of your plan limit" is actionable; "limit exceeded" is not.
+ The user-facing sequence that makes this defensible is a notification when the
+ tenant first crosses 100% (usage_counters.overage_started_at), a persistent
+ in-app indicator while in the 100-150% band, and a second warning approaching
+ the ceiling. Billing a customer for something they were never told about is a
+ refund, not revenue.';
 
 
 -- -----------------------------------------------------------------------------
@@ -437,10 +565,17 @@ CREATE TABLE usage_counters (
     -- Denormalisation here is deliberate: billing history must not move.
     limit_snapshot      bigint,
 
-    -- Set the first time used_value crosses limit_snapshot. Drives the in-app
-    -- "you are in overage" banner and the crossing notification, which are the
-    -- mitigation for billing a customer for something they did not explicitly
-    -- opt into at the moment they did it.
+    -- Snapshot of the 150% hard-block ceiling in force when this period opened,
+    -- for the same reason as limit_snapshot: a dispute about "why was I blocked
+    -- on the 14th" must be answerable from what was true on the 14th, not from
+    -- the entitlement row as it stands today.
+    ceiling_snapshot    bigint,
+
+    -- Set the first time used_value crosses limit_snapshot — i.e. entry into the
+    -- 100-150% billable overage band. Drives the in-app "you are in overage"
+    -- banner and the crossing notification, which are the mitigation for billing
+    -- a customer for something they did not explicitly opt into at the moment
+    -- they did it.
     overage_started_at  timestamptz,
 
     last_reconciled_at  timestamptz,
@@ -491,8 +626,14 @@ CREATE TABLE overage_line_items (
     period_start        timestamptz NOT NULL,
     period_end          timestamptz NOT NULL,
 
-    -- All four frozen at computation time; see the note above.
+    -- All frozen at computation time; see the note above.
     limit_value         bigint  NOT NULL,
+
+    -- The 150% ceiling as it stood when this line was computed. Recording it
+    -- makes the invoice self-explanatory ("billed 100-150%, blocked above") and
+    -- gives support a defensible answer without re-deriving anything.
+    ceiling_value       bigint,
+
     used_value          bigint  NOT NULL,
     overage_units       bigint  NOT NULL CHECK (overage_units > 0),
     unit_price          numeric(12,4) NOT NULL,
@@ -696,19 +837,40 @@ CREATE TABLE users (
     failed_login_count integer NOT NULL DEFAULT 0,
     locked_until       timestamptz,
 
+    -- [R5] Per-user extensions the tenant needs and we did not ship: licence
+    -- number, desk/team, region, employee id, calendar handle. See §0.3.
+    -- Nothing the AUTH path reads may live here — authentication and
+    -- authorisation state must be typed columns and real rows (status,
+    -- mfa_enabled, user_roles), never tenant-writable jsonb.
+    custom_attributes  jsonb NOT NULL DEFAULT '{}'::jsonb,
+
     created_at         timestamptz NOT NULL DEFAULT now(),
     updated_at         timestamptz NOT NULL DEFAULT now(),
-    deleted_at         timestamptz
+    deleted_at         timestamptz,
+
+    CONSTRAINT users_custom_attributes_is_object
+        CHECK (jsonb_typeof(custom_attributes) = 'object')
 );
 
 -- Email is unique WITHIN a tenant, not globally.
--- [JUDGMENT] This follows from the Phase 0 assumption that a user belongs to
--- exactly one tenant. It means the same human can hold separate accounts in two
--- tenants, which is normally what a B2B customer expects (their consultant has
--- an account in their workspace and in someone else's).
--- [OPEN] If a user must ever span tenants, this becomes a `tenant_memberships`
--- join and users loses its tenant_id — a genuinely invasive change. Worth
--- confirming early (architecture note Q16).
+-- [DECIDED] USERS ARE STRICTLY SINGLE-TENANT. There are no cross-tenant user
+-- records: each subdomain maps to exactly one tenant's identity space, and a
+-- users row belongs to exactly one tenant for its entire life. Confirmed by the
+-- project owner; this was previously carried as an assumption (architecture
+-- note Q16, now resolved).
+--   What that buys: users.tenant_id is a hard scope like every other table, the
+--   session/subdomain tenant equality check in the middleware is a simple
+--   comparison rather than a membership lookup, and RLS on users needs no
+--   special case.
+--   What it means in practice: the same human working with two tenants holds
+--   two separate accounts and authenticates separately in each — which is also
+--   why session cookies are scoped per-subdomain rather than to the parent
+--   domain (architecture note §4.3). For a B2B CRM this is the expected
+--   behaviour, not a limitation.
+--   The door this closes: supporting one identity across tenants later would
+--   mean a `tenant_memberships` join, users losing its tenant_id, and a rewrite
+--   of the auth path. That is an invasive change and it is deliberately not on
+--   the table.
 CREATE UNIQUE INDEX users_tenant_email_key
     ON users (tenant_id, lower(email))
     WHERE deleted_at IS NULL;
@@ -830,7 +992,7 @@ CREATE INDEX user_recovery_codes_user_idx
 
 
 -- -----------------------------------------------------------------------------
--- 4.2 Sessions — 24-hour expiry
+-- 4.2 Sessions — absolute 24-hour expiry
 -- -----------------------------------------------------------------------------
 -- [JUDGMENT] Server-side session rows rather than self-contained JWTs.
 --   The decisions in this design require REVOCATION: forced logout on role
@@ -838,8 +1000,8 @@ CREATE INDEX user_recovery_codes_user_idx
 --   devices", and immediate cutoff on suspension. A stateless JWT cannot be
 --   revoked before its expiry without a denylist — which is this table, with
 --   extra steps and worse ergonomics.
--- [ASSUMPTION] Not in the Phase 0 required table list, but required by the
---   24-hour session rule. Flagged in the architecture note (assumption A15).
+-- [DECIDED] Not in the original Phase 0 table list, but required by the 24-hour
+--   session rule and now confirmed as part of the design.
 
 CREATE TABLE sessions (
     id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -850,11 +1012,16 @@ CREATE TABLE sessions (
     -- not yield usable session tokens.
     token_hash        text NOT NULL,
 
-    -- [DECIDED] 24 hours, ABSOLUTE from issuance.
-    -- [ASSUMPTION] Absolute rather than sliding. A sliding window means an
-    -- active session never expires, which defeats the purpose of having an
-    -- expiry at all. If the intent was sliding, this default is the one line to
-    -- change (architecture note Q3).
+    -- [DECIDED] 24 hours, ABSOLUTE FROM ISSUANCE. Not sliding, not rolling.
+    --   Confirmed by the project owner (architecture note Q3, now resolved).
+    --   expires_at is set ONCE, at creation, and is never extended by activity.
+    --   A user active at hour 23 re-authenticates at hour 24.
+    --   Why absolute: a sliding window means an active session never expires,
+    --   which is the same as having no expiry for exactly the population that
+    --   matters — a stolen token on a machine someone is still using. The
+    --   24-hour bound is only a real bound if it cannot be pushed forward.
+    --   The cost, accepted: a user working a long shift is interrupted once a
+    --   day. That is the trade the rule is buying.
     issued_at         timestamptz NOT NULL DEFAULT now(),
     expires_at        timestamptz NOT NULL DEFAULT (now() + interval '24 hours'),
 
@@ -878,11 +1045,18 @@ CREATE TABLE sessions (
                           'user_suspended','admin_revoked','expired'
                       )),
 
+    -- Telemetry ONLY — "when did we last see this session". Updating it is
+    -- explicitly NOT the same as extending the session, and it must never be
+    -- used to recompute expires_at. Naming it last_seen_at rather than
+    -- last_active_at is deliberate: the second name invites someone to slide the
+    -- expiry off it.
     last_seen_at      timestamptz,
 
     CONSTRAINT sessions_user_fk
         FOREIGN KEY (tenant_id, user_id)
-        REFERENCES users (tenant_id, id) ON DELETE CASCADE
+        REFERENCES users (tenant_id, id) ON DELETE CASCADE,
+
+    CONSTRAINT sessions_expiry_after_issue CHECK (expires_at > issued_at)
 );
 
 CREATE UNIQUE INDEX sessions_token_hash_key ON sessions (token_hash);
@@ -896,11 +1070,52 @@ CREATE INDEX sessions_active_idx
 -- serves a cross-tenant maintenance job that runs as the owner, not as crm_app.
 CREATE INDEX sessions_expires_at_idx ON sessions (expires_at);
 
+-- [DECIDED] Absolute expiry, ENFORCED — not merely documented.
+--   The decision "24h absolute, never extended" is one line of application code
+--   away from becoming a sliding window: an UPDATE that touches last_seen_at and
+--   helpfully bumps expires_at at the same time. Nobody would review that as a
+--   security change. This trigger makes it impossible, so the rule survives
+--   contact with a future contributor who never read this file.
+--   issued_at is frozen for the same reason: shifting it forward is the other
+--   way to manufacture a longer session.
+CREATE OR REPLACE FUNCTION sessions_forbid_expiry_extension()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.expires_at IS DISTINCT FROM OLD.expires_at THEN
+        RAISE EXCEPTION
+            'sessions.expires_at is absolute and set once at issuance; it may '
+            'not be modified (attempted % -> %). To end a session early set '
+            'revoked_at; to give a user longer, issue a new session.',
+            OLD.expires_at, NEW.expires_at
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF NEW.issued_at IS DISTINCT FROM OLD.issued_at THEN
+        RAISE EXCEPTION
+            'sessions.issued_at is immutable (attempted % -> %).',
+            OLD.issued_at, NEW.issued_at
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER sessions_absolute_expiry
+    BEFORE UPDATE ON sessions
+    FOR EACH ROW EXECUTE FUNCTION sessions_forbid_expiry_extension();
+
 COMMENT ON TABLE sessions IS
 'A session is valid only when: revoked_at IS NULL AND expires_at > now() AND
  scope = ''full''. The scope check is what makes the restricted enrolment session
  safe — validating only revocation and expiry would let an mfa_enrolment session
  reach the whole application.
+ [DECIDED] Expiry is ABSOLUTE: 24 hours from issued_at, fixed at creation and
+ never extended by activity. The sessions_absolute_expiry trigger enforces this
+ in the database rather than trusting every future write path to honour it.
+ last_seen_at is telemetry and must not feed expires_at.
  [DECIDED] The session''s tenant_id MUST be compared against the tenant resolved
  from the request subdomain, and the request rejected on mismatch. That check is
  what stops a valid cookie from tenant A being replayed against tenant B''s
@@ -908,7 +1123,348 @@ COMMENT ON TABLE sessions IS
 
 
 -- =============================================================================
--- 5. AUDIT LOG  (Rule R6 — event-based, 12 months hot)
+-- 5. MASTER / LOOKUP DATA  (Rule R4 — masters, not enums)
+-- =============================================================================
+--
+-- [DECIDED, R4] Lead sources, stages, statuses and reasons are ROWS IN TENANT-
+-- SCOPED TABLES. They are never PostgreSQL ENUM types, and never a CHECK-
+-- constrained text column either.
+--
+-- WHY NOT AN ENUM — three distinct reasons, each sufficient on its own:
+--
+--   1. TENANT CUSTOMISABILITY WITHOUT A SCHEMA MIGRATION. This is the big one.
+--      A brokerage that wants a "Zillow" lead source and an agency that wants
+--      "Trade Show" are asking for a row, not a deploy. With an enum, every
+--      customer request becomes ALTER TYPE ... ADD VALUE — a migration, a
+--      release, and a global change to a value only one tenant asked for. In a
+--      pooled multi-tenant database an enum is by definition a GLOBAL
+--      vocabulary, which is the wrong scope for a per-tenant concept. Rows are
+--      tenant-scoped by construction (R1), so tenant A's sources are invisible
+--      to tenant B and cost tenant B nothing.
+--
+--   2. REORDER AND DEACTIVATE WITHOUT BREAKING HISTORY. Enum values cannot be
+--      removed once data references them, and their sort order is the order they
+--      were declared in — so the enum you add "Zillow" to sorts it last forever
+--      unless you rebuild the type. With rows: sort_order is a column anyone can
+--      edit, and retiring a value is is_active = false. Deactivating is the
+--      important half. A source that stops being used must disappear from the
+--      picker for NEW records while staying perfectly resolvable for the three
+--      years of historical leads that reference it. Deleting the value would
+--      orphan history; keeping it in the picker clutters it; an enum offers no
+--      third option. is_active is that third option.
+--
+--   3. PER-TENANT LABELS, DECOUPLED FROM THE MACHINE KEY. `code` is the stable
+--      identifier application logic and reports key on; `label` is display text
+--      the tenant renames freely. One tenant's "Qualified" is another's "Under
+--      Contract". With an enum the stored value IS the display string, so
+--      renaming it either breaks every query that matched on it or forces a
+--      translation layer that is really just this table with extra steps.
+--
+-- The cost we accept: a join (or a cached lookup) to render a label, and
+-- referential integrity that is FK-enforced rather than type-enforced. Both are
+-- ordinary. The enum saves one join and costs a migration per customer request.
+--
+-- [JUDGMENT] FOUR TYPED TABLES, not one generic `master_list_items` table with a
+--   list_type discriminator. A single generic table is tempting — one table, one
+--   seeding routine, one admin screen — but it cannot express a typed foreign
+--   key: nothing would stop a lead's source_id from pointing at a loss reason,
+--   because both are rows in the same table. Recovering that guarantee needs a
+--   redundant discriminator column in every referencing table plus a composite
+--   FK carrying it, which is more machinery than four small tables. Typed tables
+--   also let each master carry the columns it actually needs (lead_stages has
+--   stage_type and probability_pct; the others do not), instead of a shared
+--   nullable grab-bag. The duplication here is four near-identical DDL blocks,
+--   which is cheap and greppable.
+--
+-- THE SHARED SHAPE, identical across all four:
+--   id, tenant_id, code (stable machine key), label (renameable display text),
+--   description, sort_order, is_active, is_system, custom_attributes (R5),
+--   timestamps — plus UNIQUE (tenant_id, code) and the UNIQUE (tenant_id, id)
+--   that makes tenant-safe composite FKs possible.
+--
+-- is_system mirrors roles.is_system: seeded defaults may be renamed, reordered
+-- and deactivated by the tenant, but not deleted and not re-coded, because
+-- application logic and canned reports key on those codes.
+
+
+-- -----------------------------------------------------------------------------
+-- 5.1 Lead sources — where a lead came from
+-- -----------------------------------------------------------------------------
+CREATE TABLE lead_sources (
+    id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id         uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+
+    -- Stable machine key. Lowercase snake_case so it is safe in URLs, report
+    -- definitions and export headers. Never shown to a user; `label` is.
+    code              text NOT NULL,
+    label             text NOT NULL,
+    description       text,
+
+    -- Picker order. Not unique: ties are broken by label, and forcing uniqueness
+    -- would make "drag this one to the top" a multi-row renumber under a unique
+    -- constraint, which is a deadlock generator for no benefit.
+    sort_order        integer NOT NULL DEFAULT 0,
+
+    -- [DECIDED] Retirement is deactivation, never deletion. false = hidden from
+    -- pickers for NEW records, still resolvable for every historical row that
+    -- references it. This is the property an enum cannot provide.
+    is_active         boolean NOT NULL DEFAULT true,
+
+    -- Seeded default: renameable and deactivatable, not deletable or re-codable.
+    is_system         boolean NOT NULL DEFAULT false,
+
+    -- [R5] e.g. a UI colour, an attribution channel grouping, the external id
+    -- this source maps to in the tenant's ad platform. See §0.3.
+    custom_attributes jsonb NOT NULL DEFAULT '{}'::jsonb,
+
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    updated_at        timestamptz NOT NULL DEFAULT now(),
+
+    CONSTRAINT lead_sources_code_format
+        CHECK (code ~ '^[a-z0-9]+(_[a-z0-9]+)*$'),
+    CONSTRAINT lead_sources_custom_attributes_is_object
+        CHECK (jsonb_typeof(custom_attributes) = 'object')
+);
+
+CREATE UNIQUE INDEX lead_sources_tenant_code_key ON lead_sources (tenant_id, code);
+ALTER TABLE lead_sources ADD CONSTRAINT lead_sources_tenant_id_id_key
+    UNIQUE (tenant_id, id);
+
+-- The picker query: active values for this tenant, in display order.
+CREATE INDEX lead_sources_tenant_active_idx
+    ON lead_sources (tenant_id, sort_order, label) WHERE is_active;
+
+CREATE TRIGGER lead_sources_set_updated_at
+    BEFORE UPDATE ON lead_sources
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+-- -----------------------------------------------------------------------------
+-- 5.2 Lead statuses — the lifecycle state of a lead record
+-- -----------------------------------------------------------------------------
+-- [JUDGMENT] STATUS and STAGE are separate tables because they answer different
+--   questions and change independently. Status is the state of the RECORD ("has
+--   anyone called this person yet"); stage is the position in the SALES PIPELINE
+--   ("how close is this to closing"). Modelling them as one list is a classic
+--   CRM data-model mistake: it forces "Contacted" and "Negotiation" onto one
+--   axis, and then a lead cannot be both contacted and in negotiation.
+CREATE TABLE lead_statuses (
+    id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id         uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+
+    code              text NOT NULL,
+    label             text NOT NULL,
+    description       text,
+    sort_order        integer NOT NULL DEFAULT 0,
+    is_active         boolean NOT NULL DEFAULT true,
+    is_system         boolean NOT NULL DEFAULT false,
+
+    -- Marks the status a newly created lead receives when the caller does not
+    -- specify one. A partial unique index below allows at most one per tenant.
+    is_default        boolean NOT NULL DEFAULT false,
+
+    -- Terminal statuses stop follow-up automation and are excluded from "open
+    -- work" counts. Flagging it here rather than hardcoding a list of codes in
+    -- application logic is the same reasoning as roles.requires_2fa: a tenant
+    -- renaming or adding a status must not silently disable the behaviour.
+    is_terminal       boolean NOT NULL DEFAULT false,
+
+    custom_attributes jsonb NOT NULL DEFAULT '{}'::jsonb,
+
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    updated_at        timestamptz NOT NULL DEFAULT now(),
+
+    CONSTRAINT lead_statuses_code_format
+        CHECK (code ~ '^[a-z0-9]+(_[a-z0-9]+)*$'),
+    CONSTRAINT lead_statuses_custom_attributes_is_object
+        CHECK (jsonb_typeof(custom_attributes) = 'object')
+);
+
+CREATE UNIQUE INDEX lead_statuses_tenant_code_key ON lead_statuses (tenant_id, code);
+ALTER TABLE lead_statuses ADD CONSTRAINT lead_statuses_tenant_id_id_key
+    UNIQUE (tenant_id, id);
+
+-- At most one default status per tenant. Enforced here rather than in the
+-- application because "two defaults" makes lead creation non-deterministic.
+CREATE UNIQUE INDEX lead_statuses_one_default_per_tenant
+    ON lead_statuses (tenant_id) WHERE is_default;
+
+CREATE INDEX lead_statuses_tenant_active_idx
+    ON lead_statuses (tenant_id, sort_order, label) WHERE is_active;
+
+CREATE TRIGGER lead_statuses_set_updated_at
+    BEFORE UPDATE ON lead_statuses
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+-- -----------------------------------------------------------------------------
+-- 5.3 Lead stages — position in the sales pipeline
+-- -----------------------------------------------------------------------------
+CREATE TABLE lead_stages (
+    id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id         uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+
+    code              text NOT NULL,
+    label             text NOT NULL,
+    description       text,
+    sort_order        integer NOT NULL DEFAULT 0,
+    is_active         boolean NOT NULL DEFAULT true,
+    is_system         boolean NOT NULL DEFAULT false,
+
+    -- [JUDGMENT] The one piece of SEMANTICS the product must know about a stage.
+    --   Forecasting, conversion rate and "deals won this quarter" all need to
+    --   know which stages mean won and which mean lost. Deriving that from the
+    --   code ('closed_won') would break the moment a tenant renames or adds a
+    --   stage — the same failure mode as hardcoding a role named 'executive'.
+    --   So the meaning is a column, and the tenant's naming is free.
+    stage_type        text NOT NULL DEFAULT 'open'
+                        CHECK (stage_type IN ('open','won','lost')),
+
+    -- Default win probability for forecasting, 0-100. Nullable: a tenant that
+    -- does not do weighted-pipeline forecasting leaves it empty rather than
+    -- being made to invent numbers.
+    probability_pct   smallint CHECK (probability_pct BETWEEN 0 AND 100),
+
+    custom_attributes jsonb NOT NULL DEFAULT '{}'::jsonb,
+
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    updated_at        timestamptz NOT NULL DEFAULT now(),
+
+    CONSTRAINT lead_stages_code_format
+        CHECK (code ~ '^[a-z0-9]+(_[a-z0-9]+)*$'),
+    CONSTRAINT lead_stages_custom_attributes_is_object
+        CHECK (jsonb_typeof(custom_attributes) = 'object'),
+
+    -- A won stage at 30% or a lost stage at 90% is a data-entry error that
+    -- silently corrupts every forecast built on it.
+    CONSTRAINT lead_stages_terminal_probability CHECK (
+        (stage_type = 'won'  AND coalesce(probability_pct, 100) = 100) OR
+        (stage_type = 'lost' AND coalesce(probability_pct, 0)   = 0)   OR
+        (stage_type = 'open')
+    )
+);
+
+CREATE UNIQUE INDEX lead_stages_tenant_code_key ON lead_stages (tenant_id, code);
+ALTER TABLE lead_stages ADD CONSTRAINT lead_stages_tenant_id_id_key
+    UNIQUE (tenant_id, id);
+
+CREATE INDEX lead_stages_tenant_active_idx
+    ON lead_stages (tenant_id, sort_order, label) WHERE is_active;
+
+CREATE TRIGGER lead_stages_set_updated_at
+    BEFORE UPDATE ON lead_stages
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+COMMENT ON TABLE lead_stages IS
+'R4 master table. stage_type (open/won/lost) is the only semantics the product
+ reads; everything else about a stage — its name, order, probability, whether it
+ is offered at all — belongs to the tenant. Reporting MUST filter on stage_type,
+ never on code, or a tenant renaming a stage breaks their own dashboards.
+ [OPEN] Whether Phase 1 deals reuse these stages or get a separate deal_stages
+ master is not yet decided (architecture note Q17).';
+
+
+-- -----------------------------------------------------------------------------
+-- 5.4 Lead loss reasons — why a lead was lost
+-- -----------------------------------------------------------------------------
+-- Kept separate from lead_stages rather than being an attribute of the 'lost'
+-- stage: there is one lost stage and many reasons for reaching it, and the
+-- reason list is the single most frequently customised vocabulary in a CRM
+-- because it is what sales leadership actually reports on.
+CREATE TABLE lead_loss_reasons (
+    id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id         uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+
+    code              text NOT NULL,
+    label             text NOT NULL,
+    description       text,
+    sort_order        integer NOT NULL DEFAULT 0,
+    is_active         boolean NOT NULL DEFAULT true,
+    is_system         boolean NOT NULL DEFAULT false,
+
+    -- When true the UI must collect free-text detail alongside the reason.
+    -- "Other" without a note is a reason that teaches nobody anything.
+    requires_note     boolean NOT NULL DEFAULT false,
+
+    custom_attributes jsonb NOT NULL DEFAULT '{}'::jsonb,
+
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    updated_at        timestamptz NOT NULL DEFAULT now(),
+
+    CONSTRAINT lead_loss_reasons_code_format
+        CHECK (code ~ '^[a-z0-9]+(_[a-z0-9]+)*$'),
+    CONSTRAINT lead_loss_reasons_custom_attributes_is_object
+        CHECK (jsonb_typeof(custom_attributes) = 'object')
+);
+
+CREATE UNIQUE INDEX lead_loss_reasons_tenant_code_key
+    ON lead_loss_reasons (tenant_id, code);
+ALTER TABLE lead_loss_reasons ADD CONSTRAINT lead_loss_reasons_tenant_id_id_key
+    UNIQUE (tenant_id, id);
+
+CREATE INDEX lead_loss_reasons_tenant_active_idx
+    ON lead_loss_reasons (tenant_id, sort_order, label) WHERE is_active;
+
+CREATE TRIGGER lead_loss_reasons_set_updated_at
+    BEFORE UPDATE ON lead_loss_reasons
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+-- -----------------------------------------------------------------------------
+-- 5.5 How Phase 1 business objects must reference these masters
+-- -----------------------------------------------------------------------------
+-- [DECIDED] Phase 0 has no CRM business objects, so there is nothing here to
+-- point at these tables yet. The referencing pattern is fixed now so that the
+-- Phase 1 `leads` table is written correctly the first time rather than being
+-- retrofitted after data exists. It is the SAME composite-FK pattern used
+-- everywhere else in this file (see feature_entitlements), with one difference
+-- called out below.
+--
+--   CREATE TABLE leads (
+--       id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--       tenant_id         uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+--       ...
+--       source_id         uuid,            -- nullable: source is often unknown
+--       status_id         uuid NOT NULL,
+--       stage_id          uuid NOT NULL,
+--       loss_reason_id    uuid,            -- only set once lost
+--
+--       custom_attributes jsonb NOT NULL DEFAULT '{}'::jsonb,   -- R5, MANDATORY
+--
+--       CONSTRAINT leads_source_fk
+--           FOREIGN KEY (tenant_id, source_id)
+--           REFERENCES lead_sources (tenant_id, id) ON DELETE RESTRICT,
+--       CONSTRAINT leads_status_fk
+--           FOREIGN KEY (tenant_id, status_id)
+--           REFERENCES lead_statuses (tenant_id, id) ON DELETE RESTRICT,
+--       CONSTRAINT leads_stage_fk
+--           FOREIGN KEY (tenant_id, stage_id)
+--           REFERENCES lead_stages (tenant_id, id) ON DELETE RESTRICT,
+--       CONSTRAINT leads_loss_reason_fk
+--           FOREIGN KEY (tenant_id, loss_reason_id)
+--           REFERENCES lead_loss_reasons (tenant_id, id) ON DELETE RESTRICT,
+--       CONSTRAINT leads_custom_attributes_is_object
+--           CHECK (jsonb_typeof(custom_attributes) = 'object')
+--   );
+--
+-- TWO THINGS THAT ARE NOT NEGOTIABLE IN THAT BLOCK:
+--
+--   * COMPOSITE FKs carrying tenant_id, exactly as elsewhere in this file. A
+--     plain FK to lead_sources(id) would let tenant A's lead reference tenant
+--     B's source row. RLS does not catch this: RLS filters what you can SEE, it
+--     does not stop you WRITING a row that points somewhere else. The composite
+--     key makes the cross-tenant reference unrepresentable.
+--
+--   * ON DELETE RESTRICT, not CASCADE. This is the one place the master tables
+--     differ from the child relations above. Deleting a lead source must NEVER
+--     delete the leads that came from it — that is a data-loss bug wearing a
+--     referential-integrity costume. RESTRICT makes the attempt fail loudly,
+--     which is correct, because the intended operation was is_active = false.
+--     The application should not offer deletion of a referenced master at all.
+
+
+-- =============================================================================
+-- 6. AUDIT LOG  (Rule R6 — event-based, 12 months hot)
 -- =============================================================================
 --
 -- [DECIDED] EVENT-BASED, not row-snapshot / CDC.
@@ -924,18 +1480,44 @@ COMMENT ON TABLE sessions IS
 --   billing, export and deletion events are non-negotiable emitters.
 --
 -- [DECIDED] APPEND-ONLY. The application role receives INSERT and SELECT on this
---   table and nothing else (see §6.3). A log the application can rewrite is not
+--   table and nothing else (see §7.1). A log the application can rewrite is not
 --   an audit log.
 --
--- [JUDGMENT] PARTITIONED BY MONTH, regardless of which retention policy wins.
---   12 months hot is decided; what happens at month 13 is NOT (archive to
---   S3/Glacier, hard delete, or tier by event type — architecture note Q1).
---   Partitioning keeps all three options cheap: dropping a partition is instant,
---   while DELETE-ing a year-old slice of a large unpartitioned append-only table
---   is a long, bloat-generating operation that competes with live traffic.
+-- [DECIDED] RETENTION: 12 MONTHS HOT, THEN ARCHIVE TO S3 AND DROP.
+--   Confirmed by the project owner (architecture note Q1, now resolved). The
+--   policy in full:
+--     * A rolling 12-month window of monthly partitions stays queryable in
+--       PostgreSQL. This is what the audit UI, investigations and exports read.
+--     * A scheduled job dumps the aging (13th-oldest) partition to S3 cold
+--       storage, verifies the dump, and only then DROPs the partition.
+--     * Nothing is hard-deleted. History leaves PostgreSQL; it does not cease to
+--       exist. Retrieval past 12 months is an out-of-band request against the
+--       archive, deliberately not a product feature.
+--   Why this beats the two alternatives considered: hard delete is cheaper but
+--   irreversible, and a CRM holds exactly the kind of record — who exported the
+--   customer list, who changed permissions — that gets asked about years later.
+--   Tiering by event_category keeps the compliance-relevant subset hot but
+--   splits the log into two retention regimes and two query paths for a saving
+--   that S3 storage pricing makes irrelevant.
+--
+-- [DECIDED] PARTITIONED BY MONTH — and now doubly justified, because the
+--   retention policy above is *implemented* by DROP TABLE on a partition.
+--   Dropping a partition is instant and reclaims the space immediately, while
+--   DELETE-ing a year-old slice of a large unpartitioned append-only table is a
+--   long, bloat-generating operation that competes with live traffic. The
+--   partition boundary is also the natural archive unit: one partition, one S3
+--   object set, one atomic hand-off.
 --   Retrofitting partitioning after a year of production data is significantly
---   harder than adopting it now, so we adopt it now even though the policy it
---   serves is undecided.
+--   harder than adopting it now.
+--
+-- [OPEN] The archive job itself is NOT BUILT and is NOT a Phase 0 deliverable.
+--   It is an implementation task for a later phase (architecture note §8.3 and
+--   the follow-ups register). What must be true of it, recorded now so the
+--   requirements are not re-derived: it creates next month's partition ahead of
+--   time; it exports before it drops and verifies the export first (drop-then-
+--   discover-the-dump-failed is unrecoverable); it is idempotent and safely
+--   re-runnable; it runs as a privileged role, never as crm_app; and dropping a
+--   partition is itself an audited administrative action.
 
 CREATE TABLE audit_events (
     -- The partition key must be part of every unique constraint on a partitioned
@@ -1021,12 +1603,14 @@ CREATE INDEX audit_events_tenant_subject_idx
 --   (ideally a jsonb_path_ops GIN, scoped to specific partitions) when a real
 --   query demands it.
 
--- Example partitions. [OPEN] A scheduled job must create next month's partition
--- ahead of time and apply the retention action to the 13th-oldest — that job is
--- REQUIRED and NOT YET BUILT. If it does not run, inserts beyond the last
--- declared partition FAIL. A DEFAULT partition is deliberately not used: it
+-- Example partitions. The scheduled job described above must create next
+-- month's partition ahead of time and archive-then-drop the 13th-oldest. If it
+-- does not run, inserts beyond the last declared partition FAIL — which is the
+-- intended behaviour: a DEFAULT partition is deliberately not used because it
 -- silently absorbs those rows and hides the failure until the default partition
--- is enormous and cannot be split without an exclusive lock.
+-- is enormous and cannot be split without an exclusive lock. A loud failure on a
+-- missing partition is recoverable in minutes; a silent one is discovered in an
+-- audit. Monitor partition coverage, not just job success.
 CREATE TABLE audit_events_2026_09 PARTITION OF audit_events
     FOR VALUES FROM ('2026-09-01 00:00:00+00') TO ('2026-10-01 00:00:00+00');
 CREATE TABLE audit_events_2026_10 PARTITION OF audit_events
@@ -1035,16 +1619,23 @@ CREATE TABLE audit_events_2026_11 PARTITION OF audit_events
     FOR VALUES FROM ('2026-11-01 00:00:00+00') TO ('2026-12-01 00:00:00+00');
 
 COMMENT ON TABLE audit_events IS
-'R6 event-based audit log. Append-only; 12 months hot (queryable here).
- [OPEN] Retention beyond 12 months is UNDECIDED — archive to S3/Glacier, hard
- delete, or tier by event_category. This is the highest-priority open question in
- Phase 0: it has compliance implications and it gets harder to answer once there
- is a year of production data. Monthly partitioning is in place so that whichever
- answer wins is cheap to implement.';
+'R6 event-based audit log. Append-only; a rolling 12-month hot window of monthly
+ partitions is queryable here.
+ [DECIDED] Retention beyond 12 months: a scheduled job exports the aging
+ partition to S3 cold storage, verifies the export, and then DROPs the partition.
+ Nothing is hard-deleted — history leaves PostgreSQL, it does not cease to exist.
+ Retrieval older than 12 months is an out-of-band request against the S3 archive
+ and is deliberately not a product feature.
+ [OPEN] That job is an implementation task for a later phase; it does not exist
+ yet. Export before drop, verify before drop, idempotent, privileged role only,
+ and the drop is itself an audited action.
+ Archive manifests live OUTSIDE this schema (S3 inventory / job metadata), not in
+ a table here: a manifest of cross-tenant partitions has no meaningful tenant_id,
+ and inventing one would mean carving the first exception into R1.';
 
 
 -- =============================================================================
--- 6. ROW-LEVEL SECURITY  (Rule R1 enforcement)
+-- 7. ROW-LEVEL SECURITY  (Rule R1 enforcement)
 -- =============================================================================
 --
 -- R1 (the tenant_id column) and RLS (the policy) are ONE decision. R1 without
@@ -1078,7 +1669,13 @@ COMMENT ON TABLE audit_events IS
 -- These are written out explicitly per table rather than generated by a DO loop.
 -- A loop is less code but it makes "which tables are protected" a runtime
 -- question; explicit statements make it greppable, reviewable in a diff, and
--- directly checkable by the CI lint in §7.
+-- directly checkable by the CI lint in §8.
+--
+-- The R4 master tables (§5) are NOT special-cased here. A lookup table is
+-- precisely the kind of table someone reaches for an R1 exemption on — "it's
+-- just a list of statuses" — and that instinct is what R4 exists to refuse:
+-- these lists are tenant-owned data, so they are tenant-scoped and policy-
+-- protected exactly like a lead or a user.
 --
 -- THE SAME PATTERN MUST BE APPLIED TO EVERY TENANT-SCOPED TABLE ADDED LATER.
 -- There are no exceptions in this schema, including `tenants` itself.
@@ -1183,6 +1780,34 @@ CREATE POLICY tenant_isolation ON sessions
     USING (tenant_id = app_current_tenant_id())
     WITH CHECK (tenant_id = app_current_tenant_id());
 
+-- lead_sources (R4 master) -----------------------------------------------------
+ALTER TABLE lead_sources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lead_sources FORCE  ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON lead_sources
+    USING (tenant_id = app_current_tenant_id())
+    WITH CHECK (tenant_id = app_current_tenant_id());
+
+-- lead_statuses (R4 master) ----------------------------------------------------
+ALTER TABLE lead_statuses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lead_statuses FORCE  ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON lead_statuses
+    USING (tenant_id = app_current_tenant_id())
+    WITH CHECK (tenant_id = app_current_tenant_id());
+
+-- lead_stages (R4 master) ------------------------------------------------------
+ALTER TABLE lead_stages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lead_stages FORCE  ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON lead_stages
+    USING (tenant_id = app_current_tenant_id())
+    WITH CHECK (tenant_id = app_current_tenant_id());
+
+-- lead_loss_reasons (R4 master) ------------------------------------------------
+ALTER TABLE lead_loss_reasons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lead_loss_reasons FORCE  ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON lead_loss_reasons
+    USING (tenant_id = app_current_tenant_id())
+    WITH CHECK (tenant_id = app_current_tenant_id());
+
 -- audit_events ----------------------------------------------------------------
 -- Declared on the partitioned parent; inherited by every partition, including
 -- ones created in the future by the partition-management job.
@@ -1194,7 +1819,7 @@ CREATE POLICY tenant_isolation ON audit_events
 
 
 -- -----------------------------------------------------------------------------
--- 6.1 The application database role
+-- 7.1 The application database role
 -- -----------------------------------------------------------------------------
 -- [DECIDED] This is the most likely way the whole design silently fails.
 --   Table owners and superusers bypass RLS. If the application ever connects as
@@ -1224,20 +1849,24 @@ CREATE POLICY tenant_isolation ON audit_events
 -- convention. Revoke the ability to rewrite history:
 -- REVOKE UPDATE, DELETE ON audit_events FROM crm_app;
 -- GRANT  SELECT, INSERT ON audit_events TO crm_app;
---   (The retention/partition job runs as a different, privileged role.)
+--   (The archive/partition job runs as a different, privileged role — it is the
+--    only thing permitted to DROP a partition, and it must never share a role or
+--    a connection with request traffic.)
 
 
 -- =============================================================================
--- 7. R1 / RLS CONFORMANCE CHECK
+-- 8. R1 / RLS CONFORMANCE CHECK
 -- =============================================================================
 -- R1 is a constraint that decays silently: it holds perfectly today and is
 -- violated by the third developer who adds a lookup table in a hurry. A
 -- constraint that depends on remembering is not a constraint.
 --
--- This query is the seed of the CI lint described in the architecture note §9.
+-- This query is the seed of the CI lint described in the architecture note §10.
 -- It returns one row per violation and should return ZERO rows. Wiring it into
 -- CI so a non-empty result fails the build should be the first task of Phase 1 —
--- it is far cheaper to add now, with 14 tables, than after 140.
+-- it is far cheaper to add now, with 18 tables, than after 180. Note that the
+-- four R4 master tables added in §5 needed no change to this query and no new
+-- exception: that is the test of whether a pattern is actually uniform.
 --
 -- Note it catches BOTH silent failure modes: a missing tenant_id column, and a
 -- tenant_id column with no policy protecting it. The second is the more
@@ -1275,8 +1904,19 @@ CREATE POLICY tenant_isolation ON audit_events
 
 
 -- =============================================================================
--- 8. DEFAULT ROLE / PERMISSION SEED  (Rule R2)
+-- 9. TENANT PROVISIONING SEED  (Rules R2 and R4)
 -- =============================================================================
+-- Two functions, both called inside the tenant-creation transaction (see §1):
+--   9.1  provision_tenant_rbac_defaults  — R2 roles and permission catalogue
+--   9.2  provision_tenant_master_data    — R4 sources, statuses, stages, reasons
+-- They are separate because they fail, change and get re-run for different
+-- reasons: the permission catalogue grows when we ship a feature, the master
+-- lists are the tenant's to edit the moment provisioning finishes.
+
+
+-- -----------------------------------------------------------------------------
+-- 9.1 Default roles and permissions (R2)
+-- -----------------------------------------------------------------------------
 -- [DECIDED, R2] "Flexible default roles" means: sensible defaults ship with every
 -- tenant, AND tenants can define their own roles composed from the permission
 -- vocabulary. They are not locked to this list.
@@ -1408,13 +2048,132 @@ COMMENT ON FUNCTION provision_tenant_rbac_defaults(uuid) IS
  in the same tables with is_system = false.';
 
 
+-- -----------------------------------------------------------------------------
+-- 9.2 Default master data (R4)
+-- -----------------------------------------------------------------------------
+-- [DECIDED, R4] Every tenant is seeded with a working set of sources, statuses,
+-- stages and loss reasons at provisioning, so a new workspace can capture its
+-- first lead without configuring anything — the same "defaults ship, tenants
+-- customise" shape as R2 roles.
+--
+-- All seeded rows are is_system = true, which means: renameable, reorderable and
+-- deactivatable by the tenant, but NOT deletable and NOT re-codable. Reports and
+-- automations key on `code`; letting a tenant delete or repoint a seeded code
+-- would break their own saved views, and the failure would surface weeks later
+-- as "the dashboard is wrong".
+--
+-- USAGE — same contract as 9.1, tenant context must be set first, and this is
+-- deliberately NOT SECURITY DEFINER:
+--     BEGIN;
+--     SET LOCAL app.current_tenant_id = '<new tenant uuid>';
+--     SELECT provision_tenant_master_data('<same uuid>');
+--     COMMIT;
+--
+-- [OPEN] The exact default lists below are a STARTING POINT (architecture note
+--   Q18). Unlike the RBAC defaults, getting these wrong is cheap to correct:
+--   they are tenant-editable rows, so a bad default is a rename, not a
+--   migration. That asymmetry is most of the point of R4.
+
+CREATE OR REPLACE FUNCTION provision_tenant_master_data(p_tenant_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- ---- Lead sources --------------------------------------------------------
+    INSERT INTO lead_sources (tenant_id, code, label, sort_order, is_system)
+    SELECT p_tenant_id, v.code, v.label, v.sort_order, true
+    FROM (VALUES
+        ('web_form',       'Web Form',        10),
+        ('referral',       'Referral',        20),
+        ('phone_inbound',  'Inbound Call',    30),
+        ('email_campaign', 'Email Campaign',  40),
+        ('paid_ads',       'Paid Advertising',50),
+        ('social',         'Social Media',    60),
+        ('event',          'Event',           70),
+        ('partner',        'Partner',         80),
+        ('cold_outreach',  'Cold Outreach',   90),
+        ('other',          'Other',          100)
+    ) AS v(code, label, sort_order)
+    ON CONFLICT (tenant_id, code) DO NOTHING;
+
+    -- ---- Lead statuses -------------------------------------------------------
+    -- Exactly one is_default row, enforced by a partial unique index. Terminal
+    -- statuses stop follow-up automation and drop out of "open work" counts.
+    INSERT INTO lead_statuses (tenant_id, code, label, sort_order,
+                               is_default, is_terminal, is_system)
+    SELECT p_tenant_id, v.code, v.label, v.sort_order,
+           v.is_default, v.is_terminal, true
+    FROM (VALUES
+        ('new',         'New',          10, true,  false),
+        ('contacted',   'Contacted',    20, false, false),
+        ('working',     'Working',      30, false, false),
+        ('nurturing',   'Nurturing',    40, false, false),
+        ('qualified',   'Qualified',    50, false, false),
+        ('unqualified', 'Unqualified',  60, false, true),
+        ('converted',   'Converted',    70, false, true)
+    ) AS v(code, label, sort_order, is_default, is_terminal)
+    ON CONFLICT (tenant_id, code) DO NOTHING;
+
+    -- ---- Lead stages ---------------------------------------------------------
+    -- stage_type is the only part the product reads. Note won = 100% and
+    -- lost = 0% probability, which the lead_stages_terminal_probability CHECK
+    -- also enforces.
+    INSERT INTO lead_stages (tenant_id, code, label, sort_order,
+                             stage_type, probability_pct, is_system)
+    SELECT p_tenant_id, v.code, v.label, v.sort_order,
+           v.stage_type, v.probability_pct, true
+    FROM (VALUES
+        ('new_lead',      'New Lead',      10, 'open', 10),
+        ('qualification', 'Qualification', 20, 'open', 25),
+        ('proposal',      'Proposal',      30, 'open', 50),
+        ('negotiation',   'Negotiation',   40, 'open', 75),
+        ('closed_won',    'Closed Won',    50, 'won',  100),
+        ('closed_lost',   'Closed Lost',   60, 'lost', 0)
+    ) AS v(code, label, sort_order, stage_type, probability_pct)
+    ON CONFLICT (tenant_id, code) DO NOTHING;
+
+    -- ---- Lead loss reasons ---------------------------------------------------
+    -- 'other' requires a note: an "Other" bucket with no detail is a reason that
+    -- teaches nobody anything, and it reliably becomes the largest category.
+    INSERT INTO lead_loss_reasons (tenant_id, code, label, sort_order,
+                                   requires_note, is_system)
+    SELECT p_tenant_id, v.code, v.label, v.sort_order, v.requires_note, true
+    FROM (VALUES
+        ('price',              'Price',                10, false),
+        ('timing',             'Bad Timing',           20, false),
+        ('lost_to_competitor', 'Lost to Competitor',   30, true),
+        ('no_budget',          'No Budget',            40, false),
+        ('no_response',        'Went Unresponsive',    50, false),
+        ('not_a_fit',          'Not a Fit',            60, false),
+        ('duplicate',          'Duplicate Record',     70, false),
+        ('other',              'Other',                80, true)
+    ) AS v(code, label, sort_order, requires_note)
+    ON CONFLICT (tenant_id, code) DO NOTHING;
+END;
+$$;
+
+COMMENT ON FUNCTION provision_tenant_master_data(uuid) IS
+'Seeds the R4 master/lookup data for a newly provisioned tenant: lead sources,
+ statuses, stages and loss reasons. All seeded rows are is_system = true —
+ renameable, reorderable and deactivatable by the tenant, but not deletable and
+ not re-codable, because application logic and saved reports key on `code`.
+ Retiring a value is is_active = false, never DELETE: historical records keep
+ referencing it, and the composite FKs from Phase 1 business objects are
+ ON DELETE RESTRICT precisely so that a mistaken deletion fails loudly instead of
+ taking the referencing rows with it.';
+
+
 -- =============================================================================
 -- END — Phase 0 schema
 --
--- Tables: 14 (tenants, subscriptions, feature_entitlements, usage_counters,
+-- Tables: 18 (tenants, subscriptions, feature_entitlements, usage_counters,
 --             overage_line_items, roles, permissions, role_permissions, users,
 --             user_roles, user_mfa_methods, user_recovery_codes, sessions,
+--             lead_sources, lead_statuses, lead_stages, lead_loss_reasons,
 --             audit_events)
--- R1 conformance: 14 / 14 carry a NOT NULL tenant_id; 14 / 14 have RLS ENABLEd,
+-- R1 conformance: 18 / 18 carry a NOT NULL tenant_id; 18 / 18 have RLS ENABLEd,
 --                 FORCEd, and a tenant_isolation policy attached. No exceptions.
+-- R4: 4 master tables, zero ENUM types in this schema.
+-- R5: custom_attributes jsonb on tenants, users and all 4 master tables;
+--     MANDATORY on every CRM business object created in Phase 1.
 -- =============================================================================

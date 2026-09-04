@@ -20,12 +20,17 @@ Two conventions are used throughout:
 - **DECIDED** — a constraint handed down by the project owner, or a decision made here
   that downstream work should treat as settled.
 - **ASSUMPTION** — a reasonable default chosen to make the note concrete. It is *not*
-  settled. Each one is repeated in [§10 Open questions](#10-open-questions--assumptions-register)
+  settled. Each one is repeated in [§11 Open questions](#11-open-questions--resolutions-register)
   so they can be confirmed or overturned cheaply.
+- **RESOLVED** — an item that was an open question or an assumption in the first pass of
+  this note and has since been answered by the project owner. The answer is integrated into
+  the relevant section, and [§11](#11-open-questions--resolutions-register) records how it
+  was resolved rather than silently deleting the question.
 
-The rules referenced (R1, R2, R3, R6) were given directly by the project owner as part of
-the Phase 0 brief. There is no pre-existing engineering-rules document in this repo; this
-note is the first written record of them.
+The rules referenced (R1–R6) were given directly by the project owner: R1, R2, R3 and R6 in
+the original Phase 0 brief, R4 and R5 in a follow-up round that also answered five open
+questions. There is no pre-existing engineering-rules document in this repo; this note is
+the first written record of them.
 
 ---
 
@@ -33,13 +38,18 @@ note is the first written record of them.
 
 | Rule | Statement | Where it lands |
 |---|---|---|
-| **R1** | Every single table carries a `tenant_id` column. Non-negotiable. | [§3](#3-tenancy), [§9](#9-r1-enforcement), schema file |
+| **R1** | Every single table carries a `tenant_id` column. Non-negotiable. | [§3](#3-tenancy), [§10](#10-r1-enforcement), schema file |
 | **R2** | RBAC uses *flexible* default roles — defaults ship, tenants can define their own. | [§5](#5-rbac-r2) |
-| **R3** | Entitlements are *soft-stop* — overage billing, not hard blocks. | [§7](#7-entitlements--soft-stop-limits-r3) |
-| **R6** | Audit logs are *event-based*, with 12-month hot storage. | [§8](#8-audit-logs-r6) |
+| **R3** | Entitlements are *soft-stop* — overage billing to a **150% ceiling**, then a hard block. | [§7](#7-entitlements--soft-stop-limits-r3) |
+| **R4** | Sources, stages, statuses and reasons are **rows in master tables**, never database ENUMs. | [§9.1](#91-r4--master-tables-not-enums) |
+| **R5** | Core entities carry **`custom_attributes jsonb`** from day one. | [§9.2](#92-r5--custom-fields-from-day-one) |
+| **R6** | Audit logs are *event-based*, 12-month hot, then archived to S3 and dropped. | [§8](#8-audit-logs-r6) |
 
-Rules R4 and R5 were not supplied in the Phase 0 brief. Their absence is noted rather than
-guessed at — see [§10](#10-open-questions--assumptions-register).
+R4 and R5 were supplied by the project owner after the first pass of this note and are now
+integrated above rather than carried as a gap. The same round of confirmations resolved five
+of the open questions from the first pass — see
+[§11](#11-open-questions--resolutions-register), where each is recorded as **resolved** with
+the answer, not merely closed.
 
 ---
 
@@ -106,8 +116,8 @@ warning in [§3.4](#34-connection-pooling-caveat-important).
 
 **ASSUMPTION — migration tooling.** A SQL-first migration tool (Drizzle Kit, or
 node-pg-migrate) rather than an ORM-owned schema. Reason: R1 and the RLS policies are
-expressed most clearly as raw DDL, and we will want to lint the DDL in CI ([§9](#9-r1-enforcement)).
-Not yet decided; see [§10](#10-open-questions--assumptions-register).
+expressed most clearly as raw DDL, and we will want to lint the DDL in CI ([§10](#10-r1-enforcement)).
+Not yet decided; see [§11](#11-open-questions--resolutions-register).
 
 ### 2.3 Where AWS fits
 
@@ -119,7 +129,7 @@ Not yet decided; see [§10](#10-open-questions--assumptions-register).
 | Database | RDS PostgreSQL, Multi-AZ | See §2.2 |
 | Secrets | AWS Secrets Manager | DB creds, 2FA encryption key, third-party API keys |
 | File/object storage | S3, per-tenant key prefix `tenant/<tenant_id>/...` | Object storage has no RLS. Isolation there is an *application* responsibility and must be designed separately — flagged as an open item. |
-| Audit archive (post-12mo) | S3 + Glacier, or nothing | Undecided — see [§8.3](#83-retention--the-12-month-boundary) |
+| Audit archive (post-12mo) | **DECIDED — S3 cold storage** (Glacier Instant/Flexible class), written by a scheduled job that then drops the Postgres partition | See [§8.3](#83-retention--decided-12-months-hot-then-s3) |
 | Async / metering jobs | EventBridge Scheduler → Lambda, or an in-app queue | Needed by [§7](#7-entitlements--soft-stop-limits-r3) for usage rollups |
 | TLS / DNS | Route 53 + ACM wildcard cert `*.yourcrm.com` | The wildcard cert is what makes subdomain routing ([§4](#4-subdomain-based-tenant-routing)) practical |
 | Observability | CloudWatch initially | Structured logs must carry `tenant_id` on every line |
@@ -317,12 +327,26 @@ grow with every feature and that is expected.
 
 ### 6.1 Sessions
 
-**DECIDED — sessions expire after 24 hours.**
+**DECIDED — sessions expire 24 hours after issuance, absolutely.**
 
-**ASSUMPTION — absolute, not sliding.** 24h from issuance, not 24h from last activity. A
-sliding window means an active session never expires, which defeats the point. A user
-active at hour 23 is asked to re-authenticate. If the owner intended sliding expiry, this
-is cheap to change now and annoying to change later — flagged.
+**RESOLVED (was Q3) — absolute, not sliding or rolling.** `expires_at` is computed once, at
+session creation, and is never extended by activity. A user active at hour 23 is asked to
+re-authenticate at hour 24.
+
+Why absolute is the right answer and not just the simpler one: a sliding window means an
+active session never expires, which removes the bound for exactly the population where it
+matters — a stolen token on a machine someone is still using. A 24-hour limit that can be
+pushed forward indefinitely is not a 24-hour limit. The cost, accepted openly, is that a
+user working a long shift is interrupted once a day.
+
+**This is enforced in the database, not by convention.** The schema carries a
+`sessions_absolute_expiry` trigger that raises if an `UPDATE` changes `expires_at` or
+`issued_at`. The reason is specific: "absolute expiry" is one well-meaning line of code away
+from becoming a sliding window — an update that touches `last_seen_at` and helpfully bumps
+`expires_at` alongside it. No reviewer would flag that as a security change. The trigger
+makes it fail loudly instead. `last_seen_at` is telemetry only and must never feed
+`expires_at`; ending a session early is `revoked_at`, and giving a user longer means issuing
+a new session.
 
 Mechanics:
 
@@ -334,8 +358,8 @@ Mechanics:
 - `sessions` is tenant-scoped and carries `tenant_id` (R1).
 - Session validation checks both `expires_at` and a `revoked_at` null-check.
 
-The `sessions` table is not in the Phase 0 schema file's required list, but it is required
-by this decision — see [§10](#10-open-questions--assumptions-register).
+The `sessions` table was not in the Phase 0 brief's table list, but it is required by this
+decision and is now a settled part of the design.
 
 ### 6.2 Two-factor authentication
 
@@ -381,8 +405,8 @@ codes are stored hashed, exactly like passwords.
 
 ## 7. Entitlements — soft-stop limits (R3)
 
-**DECIDED — soft stop. When a tenant exceeds a plan limit, the action is allowed and the
-excess is metered for billing. It is not rejected.**
+**DECIDED — soft stop, bounded at 150%. When a tenant exceeds a plan limit, the action is
+allowed and the excess is metered for billing. Above 150% of the limit, it is rejected.**
 
 ### 7.1 The mechanic
 
@@ -396,7 +420,7 @@ For a limited resource (seats, contacts, API calls):
 3. **Decide** based on `soft_stop`:
    - `soft_stop = true` → **allow the action.** If usage now exceeds `limit_value`, record
      the excess as billable overage at `overage_unit_price`. Surface an in-app warning; do
-     not block.
+     not block — *until the ceiling in §7.2*.
    - `soft_stop = false` → hard cap. Reject with a clear upgrade path. This exists because a
      few limits genuinely must be hard (anything with an unbounded cost tail — outbound
      email volume, storage — where "we'll bill you" is not a real answer at 100x). R3 makes
@@ -404,15 +428,45 @@ For a limited resource (seats, contacts, API calls):
 4. **Meter.** Overage is computed from usage counters at the close of the billing period and
    handed to billing.
 
-The billing-facing consequence to be explicit about: **soft stop means we can invoice a
-customer for something they never explicitly agreed to at the moment they did it.** That is
-a product and legal decision as much as a technical one. Mitigations that Phase 0 should
-assume are required: a visible in-app indicator when a tenant is in overage, a notification
-at the moment the limit is first crossed, and a per-tenant overage ceiling
-(`overage_hard_ceiling`) above which we *do* stop — an unbounded soft limit is a runaway
-invoice waiting to happen. The schema includes a nullable ceiling column for this.
+### 7.2 The 150% ceiling
 
-### 7.2 Usage accounting
+**RESOLVED (was Q4) — soft stop is capped at 150% of the plan limit.** Three bands:
+
+| Usage | Behaviour |
+|---|---|
+| 0–100% of `limit_value` | Normal. No charge beyond the plan. |
+| 100–150% | **Allowed and billed** as overage. In-app indicator on; notification sent at the crossing. |
+| Above 150% | **Hard block**, with an upgrade path. |
+
+The billing-facing consequence this bounds: **soft stop means we can invoice a customer for
+something they never explicitly agreed to at the moment they did it.** That is a product and
+legal exposure, not just a technical one, and an *unbounded* soft limit turns it into a
+runaway invoice — a looping integration can accrue thousands of dollars overnight, which is
+a refund and a lost account, not revenue. 150% is a number a customer can be told in advance
+and a support agent can defend.
+
+Two implementation decisions that follow from it, both now in the schema:
+
+- **The ceiling is a percentage (`overage_ceiling_pct`, `NOT NULL DEFAULT 150`), not an
+  absolute unit count.** An absolute ceiling develops skew: 15,000 contacts set against a
+  10,000-contact plan silently becomes a hard block *below* the plan limit the moment the
+  tenant upgrades to a 25,000 plan — blocking a customer who just paid us more money. A
+  ratio rescales with the limit and cannot drift that way. `NOT NULL` with a default also
+  means there is no "forgot to set a ceiling" state; an uncapped soft limit is
+  unrepresentable.
+- **The effective ceiling is a generated column (`overage_ceiling_value`)**, so the hot-path
+  check is one comparison rather than arithmetic each caller re-derives. It is NULL — no
+  ceiling applies — in exactly two correct cases: unlimited/flag-only features (nothing to
+  take a percentage of), and hard-capped features (`soft_stop = false` already blocks at the
+  limit).
+
+The full enforcement order is written into the `feature_entitlements` table comment in the
+schema file so the data-access layer implements it exactly once. The user-facing half is not
+optional: notify at the 100% crossing, show a persistent indicator through the 100–150%
+band, warn again approaching the ceiling, and make the block message name the number
+("you have used 150% of your plan limit") rather than saying "limit exceeded".
+
+### 7.3 Usage accounting
 
 Two shapes of limit, and they need different accounting — conflating them is a common and
 painful mistake:
@@ -425,7 +479,9 @@ painful mistake:
 
 **ASSUMPTION** — both are represented in a single `usage_counters` table keyed by
 `(tenant_id, metric_key, period_start)`, with stock metrics using the current open period
-row as a running value. The alternative — deriving everything from a raw usage-events stream
+row as a running value. Each counter row freezes both `limit_snapshot` and
+`ceiling_snapshot` at period open, so "why was I billed / blocked on the 14th" is answerable
+from what was true on the 14th rather than from the entitlement row as it stands today. The alternative — deriving everything from a raw usage-events stream
 — is more accurate and more auditable but needs a rollup job before it is queryable at
 request latency. Starting with counters and adding an events stream later is the cheaper
 order. Flagged.
@@ -482,30 +538,233 @@ GIN index on the JSONB payload is deliberately **not** added in Phase 0 — it i
 maintain on a write-heavy append-only table, and should be added only when a real query
 demands it.
 
-### 8.3 Retention — the 12-month boundary
+### 8.3 Retention — decided: 12 months hot, then S3
 
-12 months hot (queryable in the primary database) is decided. **What happens at month 13 is
-not**, and this note will not silently decide it. The options:
+**RESOLVED (was Q1, previously the highest-priority open question in this note).** The
+policy in full:
 
-- **Archive to S3/Glacier** as Parquet or JSONL, queryable via Athena when needed. Preserves
-  history for compliance; adds a second retrieval path to build.
-- **Hard delete.** Simplest, cheapest, irreversible — and possibly *required*, since some
-  data-protection regimes treat indefinite retention as a liability rather than an asset.
-- **Tiered by event type.** Keep security/billing events longer than routine activity.
+1. A **rolling 12-month window of monthly partitions** stays queryable in PostgreSQL. This
+   is what the audit UI, investigations and exports read.
+2. A **scheduled job dumps the aging (13th-oldest) partition to S3 cold storage**, verifies
+   the dump, and only then **drops the partition** from Postgres.
+3. **Nothing is hard-deleted.** History leaves the primary database; it does not cease to
+   exist. Retrieval beyond 12 months is an out-of-band request against the archive, and is
+   deliberately *not* a product feature — building a UI over cold storage invites the
+   expectation that it is fast.
 
-**ASSUMPTION for structure only:** `audit_events` should be **partitioned by month**
-(`PARTITION BY RANGE (occurred_at)`) regardless of which option wins. Dropping a partition is
-instant; deleting 12-month-old rows from a large unpartitioned table is a long, bloat-
-generating operation. Partitioning now keeps all three options cheap; retrofitting it later
-does not. The schema file includes this, with the partition-management job flagged as
-required-but-not-built.
+Why this beats the two alternatives that were on the table. **Hard delete** is cheaper and
+irreversible, and a CRM holds exactly the records that get asked about years later — who
+exported the customer list, who changed whose permissions. **Tiering by event category**
+keeps the compliance-relevant subset hot but produces two retention regimes and two query
+paths, for a saving that S3 pricing makes irrelevant at this data volume. Archiving
+everything uniformly is the simplest thing that keeps the history.
 
-**This is the highest-priority open question in this note** — it has compliance implications
-and it gets harder to answer once there is a year of production data.
+`audit_events` is **partitioned by month** (`PARTITION BY RANGE (occurred_at)`), which this
+decision now doubly justifies: the retention action *is* a `DROP TABLE` on a partition —
+instant, and it reclaims the space immediately — where deleting a year-old slice of a large
+unpartitioned append-only table is a long, bloat-generating operation competing with live
+traffic. The partition boundary is also the natural archive unit: one partition, one set of
+S3 objects, one atomic hand-off.
+
+**The job itself is an implementation task for a later phase. It does not exist and is not a
+Phase 0 deliverable.** What must be true of it is recorded now so the requirements are not
+re-derived later:
+
+- It creates next month's partition **ahead of time**. If it does not run, inserts beyond
+  the last declared partition fail — which is intentional. A `DEFAULT` partition is
+  deliberately not used: it would silently absorb those rows and hide the failure until the
+  default partition is enormous and cannot be split without an exclusive lock. Monitor
+  partition *coverage*, not just job success.
+- It **exports before it drops, and verifies the export before it drops.** Drop-then-
+  discover-the-dump-failed is unrecoverable.
+- It is **idempotent and safely re-runnable**.
+- It runs as a **privileged role, never as `crm_app`** — the application role has `INSERT`
+  and `SELECT` on `audit_events` and nothing else, and must never be able to drop a
+  partition.
+- **Dropping a partition is itself an audited administrative action.**
+
+One deliberate non-decision: the archive **manifest** (which partition went where, when,
+with what checksum) lives outside this schema, in S3 inventory or the job's own metadata
+store. A manifest of cross-tenant partitions has no meaningful `tenant_id`, and inventing
+one would mean carving the first exception into R1 for the sake of bookkeeping. That is a
+bad trade, and it is the kind of exception that, once made, gets reused.
+
+Still to settle before this ships — flagged rather than assumed: the exact S3 storage class
+and lifecycle transitions, the archive file format (Parquet for Athena queryability versus
+JSONL for simplicity), the legally required retention *floor* in the archive, and where the
+job runs (EventBridge → Lambda, or a scheduled ECS task). See
+[§11](#11-open-questions--resolutions-register).
 
 ---
 
-## 9. R1 enforcement
+## 9. Extensibility: master data (R4) and custom fields (R5)
+
+R4 and R5 are the two rules that decide how much of a tenant's own vocabulary the product
+can absorb **without a deploy**. They pull in opposite directions and are meant to: R4 makes
+*controlled* vocabularies editable, R5 makes *uncontrolled* extension possible. §9.3 draws
+the line between them, because the failure mode of these two rules is using the wrong one.
+
+### 9.1 R4 — master tables, not enums
+
+**DECIDED — lead sources, stages, statuses and reasons are rows in tenant-scoped master
+tables. Never PostgreSQL `ENUM` types, and never a `CHECK`-constrained text column either.**
+
+Phase 0 adds four, following the R1 pattern exactly (`tenant_id NOT NULL REFERENCES
+tenants(id)`, RLS enabled *and* forced, `UNIQUE (tenant_id, id)` so referencing tables can
+use composite foreign keys):
+
+| Table | Answers |
+|---|---|
+| `lead_sources` | Where did this lead come from? |
+| `lead_statuses` | What state is this lead *record* in — has anyone worked it? |
+| `lead_stages` | Where is it in the sales *pipeline* — how close is it to closing? |
+| `lead_loss_reasons` | Why was it lost? |
+
+Each carries the same shape: `id`, `tenant_id`, `code` (stable machine key), `label`
+(renameable display text), `description`, `sort_order`, `is_active`, `is_system`,
+`custom_attributes`, timestamps. All four are seeded per tenant at provisioning by
+`provision_tenant_master_data()`.
+
+#### Why this beats an enum
+
+Three independent reasons, each sufficient on its own.
+
+**1. Tenant customisability without a schema migration.** This is the big one. A brokerage
+that wants a "Zillow" lead source and an agency that wants "Trade Show" are asking for a
+*row*, not a deploy. With an enum, every customer request becomes `ALTER TYPE ... ADD VALUE`
+— a migration, a release, and a change to a global vocabulary that only one tenant asked
+for. In a pooled multi-tenant database an enum is **by definition global**, which is the
+wrong scope for a per-tenant concept: tenant B pays the cost of tenant A's request and can
+see it in their own picker. Rows are tenant-scoped by construction (R1), so tenant A's
+sources are invisible to tenant B and cost them nothing.
+
+**2. Reorder and deactivate without breaking historical data.** Enum values cannot be
+removed once anything references them, and their sort order is the order they were declared
+in — so a value added later sorts last forever unless the type is rebuilt. With rows,
+`sort_order` is a column anyone can edit, and retiring a value is `is_active = false`.
+**Deactivation is the important half.** A source that stops being used must vanish from the
+picker for *new* records while remaining perfectly resolvable for the three years of
+historical leads that reference it. Deleting orphans history; leaving it in the picker
+clutters it; an enum offers no third option. `is_active` is that third option, and the
+composite foreign keys from business objects are `ON DELETE RESTRICT` precisely so that a
+mistaken deletion fails loudly instead of taking the referencing records with it.
+
+**3. Per-tenant labels, decoupled from the machine key.** `code` is the stable identifier
+application logic and reports key on; `label` is display text the tenant renames freely. One
+tenant's "Qualified" is another's "Under Contract". With an enum the stored value *is* the
+display string, so renaming it either breaks every query that matched on it or forces a
+translation layer — which is this table, with extra steps.
+
+**What we pay:** a join (or a cached lookup) to render a label, and referential integrity
+that is FK-enforced rather than type-enforced. Both are ordinary. The enum saves one join
+and costs a migration per customer request.
+
+#### Two design calls worth stating
+
+**Four typed tables, not one generic `master_list_items` table with a `list_type` column.**
+The generic version is tempting — one table, one seeding routine, one admin screen — but it
+cannot express a typed foreign key: nothing would stop a lead's `source_id` from pointing at
+a loss reason, since both are rows in the same table. Recovering that guarantee needs a
+redundant discriminator column in every referencing table plus a composite FK carrying it,
+which is more machinery than four small tables. Typed tables also let each master carry what
+it actually needs — `lead_stages` has `stage_type` and `probability_pct`, the others do not
+— instead of a shared nullable grab-bag.
+
+**Semantics live in columns, not in codes.** `lead_stages.stage_type` (`open`/`won`/`lost`)
+and `lead_statuses.is_terminal` exist because forecasting and "open work" counts need to know
+what a value *means*. Deriving that from the code (`WHERE code = 'closed_won'`) would break
+the moment a tenant renames or adds a stage — the same failure mode as hardcoding a role
+named `executive`, and the same fix as `roles.requires_2fa`. Reports must filter on
+`stage_type`, never on `code`.
+
+Seeded rows are `is_system = true`, mirroring `roles.is_system`: renameable, reorderable and
+deactivatable by the tenant, but **not deletable and not re-codable**, because saved reports
+and automations key on those codes. A tenant who deletes a seeded value would break their
+own dashboards, and the breakage would surface weeks later.
+
+### 9.2 R5 — custom fields from day one
+
+**DECIDED — core entities carry `custom_attributes jsonb NOT NULL DEFAULT '{}'::jsonb`,
+with a `CHECK (jsonb_typeof(custom_attributes) = 'object')`.**
+
+**Phase 0 has no CRM business-object tables.** Contacts, companies, leads, deals, activities
+and notes all arrive in the next phase. So Phase 0 does two things: it applies the column
+where it is already meaningful, and it fixes the pattern so the next phase does not
+re-derive it.
+
+Applied now to `tenants` (tenant-level settings and configuration: branding, locale
+defaults, integration identifiers, toggles a CSM flips), `users` (per-user profile
+extensions: licence number, desk, region, employee id), and all four R4 master tables
+(per-tenant metadata on a lookup value — a UI colour, the external code it maps to in an ad
+platform).
+
+> **This is mandatory for the next phase.** Every CRM business object created in Phase 1 —
+> `contacts`, `companies`, `leads`, `deals`, `activities`, `notes` — **must** be created with
+> this column and this `CHECK`, in the same DDL that creates the table. That is where the
+> rule earns its keep. The Phase 0 applications above exist so the pattern is copied rather
+> than reinvented, and the commented `leads` example in §5.5 of the schema file shows the
+> exact shape.
+
+**The tradeoff, stated plainly.** In exchange for never needing a migration to add a
+tenant-specific field, we accept data that is **untyped and unindexed by default**. Nothing
+stops `{"close_date": "not a date"}`; validation is the application's job, driven by a
+per-tenant field-definition registry (a Phase 1 table: which keys exist, their types, whether
+they are required). And a filter on a custom attribute is a sequential scan until an index
+exists.
+
+The alternatives are worse in a pooled schema. A per-tenant `ALTER TABLE` destroys the "one
+schema, one migration" property that justified pooling in the first place ([§3.1](#31-why-pooled-and-what-we-are-accepting)).
+An Entity-Attribute-Value side table costs a join per field and turns every query into a
+pivot. A jsonb column costs nothing until used — and retrofitting one onto a large table
+later means a table rewrite or a slow backfill, which is the whole argument for doing it on
+day one.
+
+**The standard mitigation, deliberately deferred.** The usual answer for query performance
+is a GIN index on the jsonb column:
+
+```sql
+CREATE INDEX <t>_custom_attributes_gin
+    ON <t> USING gin (custom_attributes jsonb_path_ops);
+```
+
+`jsonb_path_ops` is smaller and faster than the default operator class for the containment
+(`@>`) queries this actually serves, at the cost of not supporting key-existence (`?`)
+operators. **It is not created in Phase 0**, for the same reason the GIN index on
+`audit_events.payload` is not ([§8.2](#82-indexing-for-the-access-pattern)): it is paid on
+every write to serve reads nobody has issued yet. The right target is often narrower still —
+an expression index on the two or three keys a tenant actually filters by — and that cannot
+be known before real query patterns exist. **This is a future-phase decision, to be revisited
+once the CRM business objects are live and there is slow-query data to point at.** It is
+listed as an open follow-up in [§11](#11-open-questions--resolutions-register) rather than
+being quietly decided here.
+
+**Governance is what keeps it from becoming a swamp.** The rule: *anything the product
+reasons about gets a real column; `custom_attributes` is for what the tenant reasons about.*
+Applied to Phase 0, that is why the column is **absent** from join tables (they model a
+relationship, not an entity), `permissions` (a fixed vocabulary *we* define), `sessions` /
+`user_mfa_methods` / `user_recovery_codes` (a security surface — arbitrary tenant-writable
+data does not belong beside credential material), `feature_entitlements` / `usage_counters`
+/ `overage_line_items` (billing artifacts must stay typed and auditable; a money-relevant
+value in an untyped blob is a revenue incident waiting to happen), and `audit_events` (its
+`payload` already is this, and it is immutable by design).
+
+### 9.3 Which rule applies to a new field
+
+The failure mode of having both is reaching for the wrong one. The test:
+
+| Situation | Use |
+|---|---|
+| A closed list of values the product must *reason* about (route on, report on, drive automation from) | **R4** — a master table |
+| The tenant needs to store a value the product only stores and displays | **R5** — `custom_attributes` |
+| The product must branch on it *and* tenants must be able to add values | **R4**, with the branching keyed on a semantic column (`stage_type`), never on `code` |
+| It affects auth, authorisation, billing, or isolation | **Neither** — a real, typed column with constraints |
+
+That last row is the one to enforce in review. `custom_attributes` is tenant-writable data;
+nothing that decides what a user may do, or what they are charged, may be read from it.
+
+---
+
+## 10. R1 enforcement
 
 R1 — *every table carries `tenant_id`* — is a constraint that decays silently. It holds
 perfectly on day one and is violated by the third developer who adds a lookup table in a
@@ -518,9 +777,17 @@ What Phase 0 can state now, even though none of it is built yet:
    `ENABLE ROW LEVEL SECURITY`, or has no policy attached. This is a ~50-line query against
    `pg_catalog` / `information_schema`, and it is the single highest-leverage piece of
    tooling this project can build early. **It should be the first item of Phase 1.**
-2. **An explicit allowlist for genuine exceptions.** `tenants` itself, and the migration
-   bookkeeping table. Exceptions live in a checked-in list, so adding one is a visible,
-   reviewable act rather than an omission.
+2. **An explicit allowlist for genuine exceptions.** In practice this is only the migration
+   bookkeeping table — `tenants` carries a generated `tenant_id` precisely so it needs no
+   exemption. Exceptions live in a checked-in list, so adding one is a visible, reviewable
+   act rather than an omission.
+
+   The R4 master tables are the live test of this. A lookup table is exactly what someone
+   reaches for an exemption on — *"it's just a list of statuses"* — and that instinct is what
+   R4 refuses: these lists are **tenant-owned data**, so they are tenant-scoped and
+   policy-protected like a lead or a user. Adding the four master tables required no change
+   to the lint and no new exception, which is the test of whether a pattern is actually
+   uniform.
 3. **A boot-time assertion** that the application's DB role is not superuser and lacks
    `BYPASSRLS` ([§3.5](#35-the-bypassrls-trap)).
 4. **A cross-tenant integration test** — seed two tenants, set the context to A, assert that
@@ -533,22 +800,47 @@ trivially detectable in CI.
 
 ---
 
-## 10. Open questions / assumptions register
+## 11. Open questions / resolutions register
 
-Everything below is unresolved. Nothing here should be treated as decided.
+This register has two halves. The first records questions that **have been answered** and
+how — kept rather than deleted, because the reasoning behind a settled decision is the thing
+future work needs most and is the first thing lost. The second is what remains genuinely
+open.
 
-### Blocking-ish — worth answering before Phase 1 ships
+### 11.1 Resolved
+
+All five were confirmed by the project owner and are **integrated into this note and the
+schema file**, not merely noted here.
+
+| # | Question | Resolution | Where it landed |
+|---|---|---|---|
+| **Q1** | What happens to audit events after 12 months? | **RESOLVED — 12-month hot partitioned window, then an automated job dumps the aging partition to S3 cold storage and drops it from Postgres. Nothing is hard-deleted; retrieval past 12 months is out-of-band, not a product feature.** The job is an implementation task for a later phase and does not exist yet. | [§8.3](#83-retention--decided-12-months-hot-then-s3) rewritten as decided; §2.3 archive row now decided; schema file §6 header comments and the `audit_events` table comment updated. |
+| **Q3** | Is the 24h session expiry absolute or sliding? | **RESOLVED — absolute.** `expires_at` is set once at creation and never extended by activity. Confirms what the schema already assumed, and adds enforcement: a `sessions_absolute_expiry` trigger rejects any `UPDATE` that changes `expires_at` or `issued_at`, so the rule cannot be eroded by a well-meaning "bump the expiry while we touch `last_seen_at`" commit. | [§6.1](#61-sessions) upgraded from ASSUMPTION to DECIDED; schema `sessions` table, new trigger, `CHECK (expires_at > issued_at)`, table comment. |
+| **Q4** | Is there a per-tenant overage ceiling, and what is it? | **RESOLVED — soft-stop with overage billing up to a 150% ceiling, hard block above it.** Represented explicitly as `feature_entitlements.overage_ceiling_pct NOT NULL DEFAULT 150` plus a generated `overage_ceiling_value`; the previous nullable, unbounded `overage_hard_ceiling` is gone, so "no ceiling" is no longer a state anyone can leave a row in by omission. | New [§7.2](#72-the-150-ceiling); schema `feature_entitlements` columns and enforcement-contract comment, `usage_counters.ceiling_snapshot`, `overage_line_items.ceiling_value`. |
+| **Q5** | What are R4 and R5? | **RESOLVED — R4: masters, not enums. R5: `custom_attributes jsonb` on core entities from day one.** Both are now first-class rules rather than a noted gap. | [§1](#1-the-rules-this-phase-must-satisfy) rules table; new [§9](#9-extensibility-master-data-r4-and-custom-fields-r5); schema §0.3 (the R5 convention) and §5 (four master tables, seeding function, RLS policies). |
+| **Q16** | Does a user ever belong to more than one tenant? | **RESOLVED — no. Users are strictly single-tenant.** There are no cross-tenant user records; each subdomain maps to exactly one tenant's identity space. This confirms the assumption already baked into the schema, so nothing was restructured — `users.tenant_id` stays a hard scope, the session/subdomain equality check stays a simple comparison, and no `tenant_memberships` join is coming. | Schema `users` comment upgraded from `[OPEN]` to `[DECIDED]` with the consequences spelled out; assumption A14 promoted to a decision. |
+
+### 11.2 Still open — worth answering before Phase 1 ships
 
 | # | Question | Why it matters |
 |---|---|---|
-| Q1 | **What happens to audit events after 12 months** — archive to S3/Glacier, hard delete, or tiered by type? | Compliance exposure; gets harder with a year of data. See [§8.3](#83-retention--the-12-month-boundary). |
-| Q2 | **Exact default RBAC role list.** Proposed: `owner`, `admin`, `manager`, `member`, `read_only`. Which map to "executive" (`requires_2fa = true`)? | Seeded into every new tenant; changing it later means migrating existing tenants. |
-| Q3 | **Is the 24h session expiry absolute or sliding?** Assumed absolute. | Materially different UX; cheap now, disruptive later. |
-| Q4 | **Is there a per-tenant overage ceiling, and what is it?** Unbounded soft limits are a runaway-invoice risk. | Product/legal, not just technical. See [§7.1](#71-the-mechanic). |
-| Q5 | **What are R4 and R5?** Not supplied in the Phase 0 brief. | They may constrain the schema; better to know now. |
+| Q2 | **Exact default RBAC role list.** Proposed: `owner`, `admin`, `manager`, `member`, `read_only`. Which map to "executive" (`requires_2fa = true`)? Currently `owner` and `admin`; is `manager` in or out? | Seeded into every new tenant; changing it later means migrating existing tenants. |
 | Q6 | **Which permissions exist in the Phase 0 catalogue?** The schema seeds a starting set. | Tenants compose roles from this vocabulary; gaps block real workflows. |
 
-### Deferred — decide before GA
+### 11.3 New follow-ups created by the resolutions above
+
+These did not exist before this round. They are **consequences of the answers**, not
+leftovers from them, and they are recorded rather than quietly decided.
+
+| # | Question | Why it is not being decided now |
+|---|---|---|
+| Q17 | **Do Phase 1 deals reuse `lead_stages` / `lead_loss_reasons`, or get their own `deal_stages` / `deal_loss_reasons` masters?** | Naming here follows the owner's vocabulary (`lead_*`). A CRM usually has both a lead pipeline and a deal pipeline, and whether they share one stage list is a product question about how the two objects relate — which is settled when `deals` is designed, not before. |
+| Q18 | **Confirm the seeded default master values** (10 sources, 7 statuses, 6 stages, 8 loss reasons) and which, if any, should differ by industry vertical. | Deliberately low-stakes: unlike the RBAC defaults, a wrong default here is a tenant-editable row, so correcting it is a rename rather than a migration. That asymmetry is most of the point of R4. |
+| Q19 | **The S3 audit-archive job: exact storage class and lifecycle transitions, archive file format (Parquet for Athena queryability vs. JSONL for simplicity), the legally required retention floor in the archive, and where the job runs** (EventBridge → Lambda vs. scheduled ECS task). | The *policy* is decided ([§8.3](#83-retention--decided-12-months-hot-then-s3)); the *implementation* is a later-phase task. Format in particular should follow from who will read the archive and how often — an answer nobody has yet. |
+| Q20 | **When to add a GIN index on `custom_attributes`, and on which tables.** | Needs real query patterns. A GIN index is paid on every write to serve reads nobody has issued; the right index is often a narrower expression index on the two or three keys actually filtered on. Revisit once the Phase 1 business objects are live and there is slow-query data. See [§9.2](#92-r5--custom-fields-from-day-one). |
+| Q21 | **The per-tenant custom-field definition registry** — which keys exist, their types, whether they are required, and how the UI renders them. | R5 stores the values; something has to describe and validate them. This is a Phase 1 table, and designing it before there is a business object to attach fields to would be guessing. |
+
+### 11.4 Deferred — decide before GA
 
 | # | Question |
 |---|---|
@@ -557,59 +849,91 @@ Everything below is unresolved. Nothing here should be treated as decided.
 | Q9 | Migration tooling choice (Drizzle Kit / node-pg-migrate / other), and how RLS policies are represented in it. |
 | Q10 | Subdomain→tenant cache: which cache, what TTL, and how the pre-tenant-context lookup is scoped so it does not become a general-purpose god-mode connection ([§4.2](#42-the-lookup-cost)). |
 | Q11 | S3 per-tenant isolation strategy — object storage has no RLS, so this is application-enforced and needs its own design. |
-| Q12 | Usage accounting: counters-only (assumed) vs. a raw usage-events stream with rollups ([§7.2](#72-usage-accounting)). |
+| Q12 | Usage accounting: counters-only (assumed) vs. a raw usage-events stream with rollups ([§7.3](#73-usage-accounting)). |
 | Q13 | Billing provider integration (Stripe assumed but not decided) and how overage line items are pushed to it. |
 | Q14 | Custom vanity domains (`crm.company.com`) — out of scope for Phase 0, but affects cookie and cert strategy ([§4.3](#43-cookies)). |
 | Q15 | Tenant offboarding/deletion routine — ordered multi-table teardown ([§3.1](#31-why-pooled-and-what-we-are-accepting)). |
-| Q16 | Does a user ever belong to more than one tenant? Assumed **no** for Phase 0 (`users.tenant_id` is a hard scope). Supporting it later means a `tenant_memberships` join and is a genuinely invasive change — worth confirming now. |
 
-### Assumptions made in this note
+*(Q1, Q3, Q4, Q5 and Q16 are resolved — see [§11.1](#111-resolved). Numbers are not reused.)*
+
+### 11.5 Assumptions made in this note
+
+Still assumptions:
 
 `A1` Next.js App Router, single deployable, no separate API service ([§2.1](#21-application-shape)) ·
 `A2` RDS PostgreSQL 16+, Multi-AZ ([§2.2](#22-persistence)) ·
 `A3` PgBouncer/RDS Proxy in transaction pooling mode ([§2.2](#22-persistence)) ·
-`A4` All AWS service selections in [§2.3](#23-where-aws-fits) ·
+`A4` All AWS service selections in [§2.3](#23-where-aws-fits) *(except the audit archive target, now decided)* ·
 `A5` Session cookies scoped per-subdomain, not parent-domain ([§4.3](#43-cookies)) ·
-`A6` Absolute 24h session expiry ([§6.1](#61-sessions)) ·
 `A7` Server-side session records rather than stateless JWTs ([§6.1](#61-sessions)) ·
 `A8` TOTP as the Phase 0 second factor; SMS excluded; WebAuthn not precluded ([§6.2](#62-two-factor-authentication)) ·
 `A9` Default role list ([§5](#5-rbac-r2)) ·
 `A10` `resource.action` permission naming ([§5](#5-rbac-r2)) ·
 `A11` Union (not deny-precedence) semantics for multi-role permissions ([§5](#5-rbac-r2)) ·
-`A12` Counter-based usage accounting ([§7.2](#72-usage-accounting)) ·
-`A13` Monthly partitioning of `audit_events` ([§8.3](#83-retention--the-12-month-boundary)) ·
-`A14` One user belongs to exactly one tenant (Q16) ·
-`A15` A `sessions` table is required by [§6.1](#61-sessions) though it was not in the Phase 0 table list.
+`A12` Counter-based usage accounting ([§7.3](#73-usage-accounting)) ·
+`A16` Four separate typed master tables rather than one generic list table ([§9.1](#91-r4--master-tables-not-enums)) ·
+`A17` The set of Phase 0 tables that carry `custom_attributes`, and the exclusions ([§9.2](#92-r5--custom-fields-from-day-one))
+
+Promoted to decisions this round:
+
+`A6` → **DECIDED.** Absolute 24h session expiry, now trigger-enforced (Q3) ·
+`A13` → **DECIDED.** Monthly partitioning of `audit_events`; it is now the mechanism the
+retention policy runs on, not just a structural hedge (Q1) ·
+`A14` → **DECIDED.** One user belongs to exactly one tenant (Q16) ·
+`A15` → **DECIDED.** The `sessions` table is part of the design, required by the 24-hour
+session rule.
 
 ---
 
-## 11. Verification status of the companion schema
+## 12. Verification status of the companion schema
 
 `schema-phase-0.sql` was not just written — it was executed against a real PostgreSQL 16
-instance and the isolation properties were asserted, not assumed. What was confirmed:
+instance and its properties were asserted, not assumed. **Re-run in full after this round of
+changes**, as the app role (`crm_app`: not superuser, no `BYPASSRLS`, not the table owner),
+with two tenants provisioned end to end. What was confirmed:
 
 | Check | Result |
 |---|---|
-| Full DDL applies cleanly (`ON_ERROR_STOP=1`) | Pass — 14 tables |
-| R1 conformance lint ([§9](#9-r1-enforcement)) returns zero violations | Pass — 14/14 have `NOT NULL tenant_id` + RLS enabled + forced + policy |
-| Tenant A's context sees only tenant A's rows | Pass |
-| **No** tenant context set → zero rows, not all rows (fail-closed) | Pass |
-| Cross-tenant `INSERT` rejected by `WITH CHECK` | Pass — RLS violation raised |
-| `audit_events` routes to the correct monthly partition | Pass |
+| Full DDL applies cleanly (`ON_ERROR_STOP=1`) | Pass — 18 tables |
+| R1 conformance lint ([§10](#10-r1-enforcement)) returns zero violations | Pass — 18/18 have `NOT NULL tenant_id` + RLS enabled + forced + policy, no new exceptions |
+| **R4** — zero `ENUM` types exist in the schema | Pass — 0 |
+| **R4** — master data seeds per tenant at provisioning | Pass — 10 sources / 7 statuses / 6 stages / 8 loss reasons, per tenant |
+| **R4** — master tables are tenant-isolated | Pass — tenant A sees 6 stage rows, all its own |
+| **R4** — tenant A renames a status and deactivates a source; tenant B is unaffected | Pass — B still reads its own label and its own `is_active` |
+| **R4** — cross-tenant `INSERT` into a master table rejected | Pass — RLS policy violation raised |
+| **R5** — `custom_attributes` present and `NOT NULL` on the 6 intended tables | Pass — `tenants`, `users`, 4 masters |
+| **R5** — object accepted, non-object rejected | Pass — scalar jsonb rejected by the `CHECK` |
+| **150% ceiling** — generated correctly | Pass — 10,000 → 15,000; 1,000,000 → 1,500,000 |
+| **150% ceiling** — NULL (no ceiling) for unlimited and for hard-capped features | Pass |
+| **Sessions** — lifetime is exactly 24h, `last_seen_at` update succeeds | Pass — `1 day` |
+| **Sessions** — extending `expires_at` is refused | Pass — trigger raises; revocation still succeeds |
+| `audit_events` routes to the correct monthly partition | Pass — Oct event → `audit_events_2026_10` |
 | `crm_app` cannot `UPDATE`/`DELETE` audit rows (append-only via grants) | Pass — permission denied |
-| Tenant signup works without any RLS bypass | Pass |
+| **No** tenant context set → zero rows, not all rows (fail-closed) | Pass |
+| Full cross-tenant sweep: context A returns zero B rows on every table | Pass |
+| Tenant signup + full provisioning works without any RLS bypass | Pass |
 
-Two findings came out of running it rather than reading it, both now fixed in the schema:
+Findings that came out of running it rather than reading it, all now fixed in the schema:
 
-1. **The lint caught a real defect on its first run.** `tenants.tenant_id` is a generated
-   column (`GENERATED ALWAYS AS (id) STORED`), and PostgreSQL does **not** infer `NOT NULL`
-   for a generated column even when the expression can never be null. The table therefore
-   failed R1's own conformance check until `NOT NULL` was stated explicitly. This is a good
+1. **The lint caught a real defect on its first run** (first pass). `tenants.tenant_id` is a
+   generated column (`GENERATED ALWAYS AS (id) STORED`), and PostgreSQL does **not** infer
+   `NOT NULL` for a generated column even when the expression can never be null. The table
+   therefore failed R1's own conformance check until `NOT NULL` was stated explicitly. A good
    sign for the lint: it found something a schema review would plausibly have waved through.
-2. **Tenant creation needs no privileged bypass.** Generating the UUID application-side and
-   setting the context to it before the insert satisfies the policy's `WITH CHECK`. Worth
-   protecting deliberately — a bypass added "just for provisioning" is the usual first leak
-   in a design like this.
+2. **Tenant creation needs no privileged bypass** (first pass). Generating the UUID
+   application-side and setting the context to it before the insert satisfies the policy's
+   `WITH CHECK`. Worth protecting deliberately — a bypass added "just for provisioning" is
+   the usual first leak in a design like this.
+3. **The first version of the 150% ceiling was a trap for the caller** (this pass). It
+   carried a `CHECK (soft_stop OR overage_ceiling_pct = 100)` to express "a hard cap has no
+   headroom above the limit". That constraint is correct in spirit and wrong in practice: the
+   column defaults to 150, so **every hard-capped entitlement failed to insert** unless the
+   caller redundantly restated `overage_ceiling_pct = 100`. A constraint that rejects its own
+   column's default is a bug generator. Fixed by moving the semantics into the generated
+   column instead — `overage_ceiling_value` is NULL when `soft_stop` is false, which reads
+   correctly as "no ceiling applies; this blocks at the limit" — and dropping the `CHECK`.
+   Worth recording because it is the general lesson: express a rule where it costs the caller
+   nothing to obey.
 
 ---
 

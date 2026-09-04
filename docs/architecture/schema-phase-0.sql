@@ -123,7 +123,16 @@ $$;
 -- WHAT WE ARE PAYING FOR IT, stated plainly:
 --   * The data is UNTYPED. Nothing stops '{"close_date": "not a date"}'.
 --     Validation is the application's job, driven by a per-tenant field-
---     definition registry (a Phase 1 table — see architecture note §9.2).
+--     definition registry — a custom_field_definitions table describing which
+--     keys exist, their types, and whether they are required.
+--     [DEFERRED TO PHASE 2 — Q21] That registry is NOT created here and is NOT a
+--     Phase 1 deliverable. It describes and validates values attached to CRM
+--     business objects, and those objects do not exist until Phase 1 ships;
+--     designing the registry before there is anything to attach fields to is
+--     guessing at its own shape. Phase 2 is the scheduled build. Until then,
+--     custom_attributes is validated by the application against nothing, which
+--     is a known and accepted Phase 1 gap — not an oversight. See architecture
+--     note §11.4.
 --   * The data is UNINDEXED by default. A filter on a custom attribute is a
 --     sequential scan until an index exists.
 --   * It is a dumping ground unless governed. The rule that keeps it honest:
@@ -136,11 +145,12 @@ $$;
 --   jsonb_path_ops is smaller and faster than the default operator class for
 --   the containment (@>) queries this actually serves; it does not support key-
 --   existence (?) operators, which is the trade.
---   [OPEN] NOT created in Phase 0. A GIN index is paid on every write to serve
---   reads nobody has issued yet, and the right target is usually a narrow
---   expression index on the two or three keys a tenant actually filters by —
---   which cannot be known before real query patterns exist. Revisit once the
---   CRM business objects are live and slow-query logs say something.
+--   [DEFERRED TO PHASE 2 — Q20] NOT created in Phase 0. A GIN index is paid on
+--   every write to serve reads nobody has issued yet, and the right target is
+--   usually a narrow expression index on the two or three keys a tenant actually
+--   filters by — which cannot be known before real query patterns exist. Phase 2
+--   is the scheduled revisit, because by then the Phase 1 business objects have
+--   produced slow-query data to point at. See architecture note §11.4.
 --
 -- WHICH TABLES GET IT, and why the others do not:
 --   YES — tenants (tenant-level settings/config), users (per-user profile
@@ -1166,19 +1176,62 @@ COMMENT ON TABLE sessions IS
 -- referential integrity that is FK-enforced rather than type-enforced. Both are
 -- ordinary. The enum saves one join and costs a migration per customer request.
 --
--- [JUDGMENT] FOUR TYPED TABLES, not one generic `master_list_items` table with a
+-- [JUDGMENT] SIX TYPED TABLES, not one generic `master_list_items` table with a
 --   list_type discriminator. A single generic table is tempting — one table, one
 --   seeding routine, one admin screen — but it cannot express a typed foreign
 --   key: nothing would stop a lead's source_id from pointing at a loss reason,
 --   because both are rows in the same table. Recovering that guarantee needs a
 --   redundant discriminator column in every referencing table plus a composite
---   FK carrying it, which is more machinery than four small tables. Typed tables
---   also let each master carry the columns it actually needs (lead_stages has
---   stage_type and probability_pct; the others do not), instead of a shared
---   nullable grab-bag. The duplication here is four near-identical DDL blocks,
+--   FK carrying it, which is more machinery than six small tables. Typed tables
+--   also let each master carry the columns it actually needs (the stage tables
+--   have stage_type and probability_pct; the others do not), instead of a shared
+--   nullable grab-bag. The duplication here is six near-identical DDL blocks,
 --   which is cheap and greppable.
 --
--- THE SHARED SHAPE, identical across all four:
+-- THE SIX:
+--   lead_sources       §5.1   Where did this lead come from?
+--   lead_statuses      §5.2   What state is the lead RECORD in?
+--   lead_stages        §5.3   Where is the lead in the pre-sales pipeline?
+--   lead_loss_reasons  §5.4   Why was the lead lost?
+--   deal_stages        §5.5   Where is the deal in the SALES pipeline?
+--   deal_loss_reasons  §5.6   Why was the deal lost?
+--
+-- ---- WHY LEADS AND DEALS DO NOT SHARE A STAGE VOCABULARY (Q17, resolved) -----
+--
+-- [DECIDED] Deals get their OWN stage and loss-reason masters. lead_stages and
+--   deal_stages are structurally identical and semantically different, and the
+--   difference is the whole reason they are two tables rather than one.
+--
+--   A LEAD's stages are PRE-SALES QUALIFICATION. They answer "is there a real
+--   opportunity here at all?" — an unqualified enquiry being worked toward the
+--   moment it becomes (or fails to become) a deal. The lead pipeline's terminal
+--   state is a decision about the LEAD's validity: converted, or discarded.
+--
+--   A DEAL's stages are THE SALES PIPELINE ITSELF. They answer "how close is
+--   this known-real opportunity to money?" — proposal, negotiation, contract,
+--   closed. The deal pipeline's terminal state is a commercial outcome: revenue
+--   booked, or revenue lost to a competitor or a budget.
+--
+--   Those are different lifecycles with different owners, different reporting,
+--   and different cardinality of change. Forcing them onto one list produces the
+--   same defect as merging lead_statuses into lead_stages (see §5.2): a single
+--   axis that cannot represent two independent facts. Concretely, a shared list
+--   would mean an SDR's "Qualification" and an AE's "Negotiation" live in one
+--   picker, every lead report has to exclude the deal-only values and vice
+--   versa, and a tenant reordering their sales pipeline silently reorders their
+--   lead pipeline. Conversion-rate reporting is the sharpest case: lead→deal
+--   conversion is a rate BETWEEN the two pipelines, and it is not computable if
+--   they are the same pipeline.
+--
+--   The cost accepted: two lists to configure instead of one, and two seeding
+--   blocks in provision_tenant_master_data(). That is the correct trade — the
+--   alternative is a vocabulary that is wrong for both objects.
+--
+--   NOT ADDED, deliberately: there is no `deal_sources` and no `deal_statuses`.
+--   See the note at the end of §5.6 for the reasoning and for what would make
+--   either one necessary.
+--
+-- THE SHARED SHAPE, identical across all six:
 --   id, tenant_id, code (stable machine key), label (renameable display text),
 --   description, sort_order, is_active, is_system, custom_attributes (R5),
 --   timestamps — plus UNIQUE (tenant_id, code) and the UNIQUE (tenant_id, id)
@@ -1362,8 +1415,11 @@ COMMENT ON TABLE lead_stages IS
  reads; everything else about a stage — its name, order, probability, whether it
  is offered at all — belongs to the tenant. Reporting MUST filter on stage_type,
  never on code, or a tenant renaming a stage breaks their own dashboards.
- [OPEN] Whether Phase 1 deals reuse these stages or get a separate deal_stages
- master is not yet decided (architecture note Q17).';
+ [DECIDED] These are the PRE-SALES QUALIFICATION stages of a lead, and they are
+ NOT shared with deals. Deals have their own deal_stages master (§5.5), because a
+ deal''s stages are the sales pipeline itself rather than the question of whether
+ an opportunity exists at all. Phase 1 `leads` reference this table; Phase 1
+ `deals` reference deal_stages. (Architecture note Q17, now resolved.)';
 
 
 -- -----------------------------------------------------------------------------
@@ -1413,7 +1469,205 @@ CREATE TRIGGER lead_loss_reasons_set_updated_at
 
 
 -- -----------------------------------------------------------------------------
--- 5.5 How Phase 1 business objects must reference these masters
+-- 5.5 Deal stages — position in the SALES pipeline
+-- -----------------------------------------------------------------------------
+-- [DECIDED, R4 / Q17] Structurally identical to lead_stages, deliberately.
+--   The column list is copied rather than shared because the two tables hold
+--   different vocabularies for different lifecycles (see the §5 header): a lead
+--   stage is pre-sales qualification, a deal stage is the sales pipeline itself.
+--   Identical structure is what makes the duplication cheap — the admin UI, the
+--   picker query and the seeding block are the same code shape twice — and the
+--   separate table is what keeps the two vocabularies from colliding.
+--
+--   The alternative considered and rejected: one `stages` table with an
+--   `object_type` discriminator ('lead' | 'deal'). That is the generic
+--   master_list_items idea at smaller scale, and it fails the same way — a
+--   deal's stage_id could point at a lead stage, and preventing it needs a
+--   redundant discriminator column plus a composite FK carrying it in every
+--   referencing table. Two tables cost two DDL blocks; the discriminator costs a
+--   constraint in every table that will ever reference a stage.
+CREATE TABLE deal_stages (
+    id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id         uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+
+    code              text NOT NULL,
+    label             text NOT NULL,
+    description       text,
+    sort_order        integer NOT NULL DEFAULT 0,
+    is_active         boolean NOT NULL DEFAULT true,
+    is_system         boolean NOT NULL DEFAULT false,
+
+    -- [JUDGMENT] Same semantics-as-a-column rule as lead_stages.stage_type, and
+    --   it matters more here: revenue reporting is built on it. "Bookings this
+    --   quarter" is WHERE stage_type = 'won', not WHERE code = 'closed_won'. A
+    --   tenant who renames or adds a closing stage must not silently break their
+    --   own revenue number, which is exactly what code-matching would do.
+    stage_type        text NOT NULL DEFAULT 'open'
+                        CHECK (stage_type IN ('open','won','lost')),
+
+    -- Weighted-pipeline forecasting. Nullable for tenants who do not forecast.
+    probability_pct   smallint CHECK (probability_pct BETWEEN 0 AND 100),
+
+    custom_attributes jsonb NOT NULL DEFAULT '{}'::jsonb,
+
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    updated_at        timestamptz NOT NULL DEFAULT now(),
+
+    CONSTRAINT deal_stages_code_format
+        CHECK (code ~ '^[a-z0-9]+(_[a-z0-9]+)*$'),
+    CONSTRAINT deal_stages_custom_attributes_is_object
+        CHECK (jsonb_typeof(custom_attributes) = 'object'),
+
+    -- A won stage at 30% or a lost stage at 90% silently corrupts every forecast
+    -- built on it. Same guard as lead_stages.
+    CONSTRAINT deal_stages_terminal_probability CHECK (
+        (stage_type = 'won'  AND coalesce(probability_pct, 100) = 100) OR
+        (stage_type = 'lost' AND coalesce(probability_pct, 0)   = 0)   OR
+        (stage_type = 'open')
+    )
+);
+
+CREATE UNIQUE INDEX deal_stages_tenant_code_key ON deal_stages (tenant_id, code);
+ALTER TABLE deal_stages ADD CONSTRAINT deal_stages_tenant_id_id_key
+    UNIQUE (tenant_id, id);
+
+CREATE INDEX deal_stages_tenant_active_idx
+    ON deal_stages (tenant_id, sort_order, label) WHERE is_active;
+
+CREATE TRIGGER deal_stages_set_updated_at
+    BEFORE UPDATE ON deal_stages
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+COMMENT ON TABLE deal_stages IS
+'R4 master table. THE SALES PIPELINE — where a known-real opportunity sits on the
+ way to money (proposal, negotiation, contract, closed). Distinct from
+ lead_stages, which is the PRE-SALES QUALIFICATION pipeline answering whether an
+ opportunity exists at all. The two are structurally identical and semantically
+ different; merging them would put an SDR''s qualification steps and an AE''s
+ closing steps on one axis, and would make lead-to-deal conversion rate — a rate
+ BETWEEN the two pipelines — uncomputable. (Architecture note Q17, resolved.)
+ stage_type (open/won/lost) is the only semantics the product reads. Revenue and
+ forecast reporting MUST filter on stage_type, never on code.
+ [OPEN] Multiple named pipelines per tenant (a "New Business" pipeline and a
+ "Renewals" pipeline, each with its own stage list) is a real CRM requirement and
+ is NOT modelled here — it would need a `pipelines` table and a pipeline_id on
+ this one. Deliberately not built in Phase 0: it is a Phase 1 question that
+ depends on how `deals` is shaped. Architecture note Q22.';
+
+
+-- -----------------------------------------------------------------------------
+-- 5.6 Deal loss reasons — why a deal was lost
+-- -----------------------------------------------------------------------------
+-- [DECIDED, R4 / Q17] Separate from lead_loss_reasons, for the same reason the
+--   stage lists are separate, and the separation bites harder here.
+--   A LEAD is lost for reasons about whether an opportunity was ever real:
+--   unresponsive, not a fit, duplicate record, no budget at all.
+--   A DEAL is lost for commercial reasons against a real, qualified buyer: we
+--   were outsold, we were outpriced, we lacked a capability, the budget was
+--   withdrawn late.
+--   These are the two most-reported-on vocabularies in a CRM and they feed
+--   different decisions — lead loss reasons tune marketing spend and lead
+--   qualification, deal loss reasons tune pricing, product and competitive
+--   positioning. Mixing them produces a single "why we lose" report that answers
+--   neither question, and "Duplicate Record" sitting in a competitive win/loss
+--   review is the visible symptom.
+CREATE TABLE deal_loss_reasons (
+    id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id         uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+
+    code              text NOT NULL,
+    label             text NOT NULL,
+    description       text,
+    sort_order        integer NOT NULL DEFAULT 0,
+    is_active         boolean NOT NULL DEFAULT true,
+    is_system         boolean NOT NULL DEFAULT false,
+
+    -- When true the UI must collect free-text detail alongside the reason.
+    -- "Lost to Competitor" without naming the competitor is a data point that
+    -- cannot be acted on.
+    requires_note     boolean NOT NULL DEFAULT false,
+
+    custom_attributes jsonb NOT NULL DEFAULT '{}'::jsonb,
+
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    updated_at        timestamptz NOT NULL DEFAULT now(),
+
+    CONSTRAINT deal_loss_reasons_code_format
+        CHECK (code ~ '^[a-z0-9]+(_[a-z0-9]+)*$'),
+    CONSTRAINT deal_loss_reasons_custom_attributes_is_object
+        CHECK (jsonb_typeof(custom_attributes) = 'object')
+);
+
+CREATE UNIQUE INDEX deal_loss_reasons_tenant_code_key
+    ON deal_loss_reasons (tenant_id, code);
+ALTER TABLE deal_loss_reasons ADD CONSTRAINT deal_loss_reasons_tenant_id_id_key
+    UNIQUE (tenant_id, id);
+
+CREATE INDEX deal_loss_reasons_tenant_active_idx
+    ON deal_loss_reasons (tenant_id, sort_order, label) WHERE is_active;
+
+CREATE TRIGGER deal_loss_reasons_set_updated_at
+    BEFORE UPDATE ON deal_loss_reasons
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+COMMENT ON TABLE deal_loss_reasons IS
+'R4 master table. Why a qualified DEAL was lost — a commercial post-mortem that
+ feeds pricing, product and competitive positioning. Distinct from
+ lead_loss_reasons, which records why an enquiry never became an opportunity and
+ feeds marketing spend and lead qualification instead. (Architecture note Q17,
+ resolved.)';
+
+
+-- -----------------------------------------------------------------------------
+-- 5.6a WHY THERE IS NO deal_sources AND NO deal_statuses
+-- -----------------------------------------------------------------------------
+-- [JUDGMENT] Q17 asked for deal stages and deal loss reasons. The symmetric
+-- question — should deals also get their own `sources` and `statuses` masters? —
+-- is answered NO here, deliberately and with the reasoning recorded, rather than
+-- either silently adding two more tables or silently not considering it.
+--
+--   NO deal_sources. `lead_sources` answers "where did this business come
+--   from" — an ACQUISITION-ATTRIBUTION vocabulary (web form, referral, paid
+--   ads, partner). That question is asked once per opportunity, at the point of
+--   first contact, and its answer does not change when a lead becomes a deal.
+--   A separate deal_sources list would be the same vocabulary maintained twice,
+--   which guarantees the two drift apart, and attribution reporting — the entire
+--   purpose of the list — would then have to reconcile "Referral" against
+--   "Referral" across two tables. Phase 1 `deals` should carry the source
+--   through from the originating lead, referencing lead_sources.
+--     [OPEN] Two consequences that Phase 1 must decide, not Phase 0: (a) whether
+--     `lead_sources` should be renamed to something object-neutral once a second
+--     object references it — the name will read wrong on a deal — and (b) how a
+--     deal created directly, with no originating lead, gets a source. Both are
+--     naming/flow questions on a live table, and both are cheap to settle then
+--     and expensive to guess at now. Architecture note Q23.
+--
+--   NO deal_statuses. A lead needs BOTH a status and a stage because they are
+--   genuinely independent axes: "has anyone worked this record" is not the same
+--   question as "how close is it to closing", and a lead can be Contacted and in
+--   Qualification simultaneously (§5.2). A deal does not have that second axis —
+--   a deal's record state IS its pipeline position, and the terminal semantics a
+--   status would carry (lead_statuses.is_terminal) are already carried by
+--   deal_stages.stage_type in ('won','lost'). Adding deal_statuses would
+--   recreate exactly the one-concept-two-lists confusion that §5.2 warns
+--   against, and the first symptom would be a deal whose status says Open and
+--   whose stage says Closed Won.
+--     What would change this answer: a deal-level lifecycle that is genuinely
+--     orthogonal to the pipeline — approval workflow (draft / pending approval /
+--     approved), or contract state (signed / countersigned / executed) running
+--     alongside the sales stage. If Phase 1 needs one of those, it is a NEW
+--     master with its own name (`deal_approval_states`), not a `deal_statuses`
+--     table shaped by symmetry with leads. Naming a table after the symmetry
+--     rather than after the question is how the confusion gets in.
+--
+-- FLAGGED FOR THE PROJECT OWNER: both of these are judgment calls made here, not
+-- instructions received. If deals in this business genuinely have their own
+-- acquisition channels, or their own approval lifecycle, say so and they become
+-- ordinary additions following this same pattern.
+
+
+-- -----------------------------------------------------------------------------
+-- 5.7 How Phase 1 business objects must reference these masters
 -- -----------------------------------------------------------------------------
 -- [DECIDED] Phase 0 has no CRM business objects, so there is nothing here to
 -- point at these tables yet. The referencing pattern is fixed now so that the
@@ -1449,7 +1703,30 @@ CREATE TRIGGER lead_loss_reasons_set_updated_at
 --           CHECK (jsonb_typeof(custom_attributes) = 'object')
 --   );
 --
--- TWO THINGS THAT ARE NOT NEGOTIABLE IN THAT BLOCK:
+-- And the deal side, which references the DEAL masters (§5.5, §5.6) — not the
+-- lead ones. This is the referencing consequence of Q17:
+--
+--   CREATE TABLE deals (
+--       id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--       tenant_id         uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+--       ...
+--       stage_id          uuid NOT NULL,   -- -> deal_stages, NOT lead_stages
+--       loss_reason_id    uuid,            -- -> deal_loss_reasons, only once lost
+--       source_id         uuid,            -- -> lead_sources; see §5.6a and Q23
+--
+--       custom_attributes jsonb NOT NULL DEFAULT '{}'::jsonb,   -- R5, MANDATORY
+--
+--       CONSTRAINT deals_stage_fk
+--           FOREIGN KEY (tenant_id, stage_id)
+--           REFERENCES deal_stages (tenant_id, id) ON DELETE RESTRICT,
+--       CONSTRAINT deals_loss_reason_fk
+--           FOREIGN KEY (tenant_id, loss_reason_id)
+--           REFERENCES deal_loss_reasons (tenant_id, id) ON DELETE RESTRICT,
+--       CONSTRAINT deals_custom_attributes_is_object
+--           CHECK (jsonb_typeof(custom_attributes) = 'object')
+--   );
+--
+-- TWO THINGS THAT ARE NOT NEGOTIABLE IN THOSE BLOCKS:
 --
 --   * COMPOSITE FKs carrying tenant_id, exactly as elsewhere in this file. A
 --     plain FK to lead_sources(id) would let tenant A's lead reference tenant
@@ -1604,21 +1881,89 @@ CREATE INDEX audit_events_tenant_subject_idx
 --   single event insert to serve queries nobody has asked for yet. Add one
 --   (ideally a jsonb_path_ops GIN, scoped to specific partitions) when a real
 --   query demands it.
+--   [DEFERRED TO PHASE 2 — Q20] This is not "open" and it is not "resolved": it
+--   is scheduled. Phase 2 is where the CRM business objects have been live long
+--   enough to produce slow-query data, which is the only input that can decide
+--   which columns and which keys are worth indexing. Do not relitigate it in
+--   Phase 1; do not skip it in Phase 2. See architecture note §11.4.
 
--- Example partitions. The scheduled job described above must create next
--- month's partition ahead of time and archive-then-drop the 13th-oldest. If it
--- does not run, inserts beyond the last declared partition FAIL — which is the
--- intended behaviour: a DEFAULT partition is deliberately not used because it
--- silently absorbs those rows and hides the failure until the default partition
--- is enormous and cannot be split without an exclusive lock. A loud failure on a
--- missing partition is recoverable in minutes; a silent one is discovered in an
--- audit. Monitor partition coverage, not just job success.
+-- ---- PARTITION RUNWAY -------------------------------------------------------
+-- [DECIDED] TWELVE MONTHS OF PARTITIONS ARE PRE-CREATED, not three.
+--
+--   Why this is a correctness property and not housekeeping: there is no
+--   DEFAULT partition, deliberately. A DEFAULT partition would silently absorb
+--   rows that fall outside every declared range and hide the failure until it is
+--   enormous and cannot be split without an exclusive lock. Without one, an
+--   INSERT past the last declared bound FAILS — loudly, which is the behaviour
+--   we want, but it fails on the AUDIT WRITE PATH. Since emitting an audit event
+--   is part of the definition of done for every state-changing operation (§6
+--   header), a missing partition does not degrade logging; it takes down every
+--   write in the product that emits an event.
+--
+--   The previous version of this file declared three partitions (2026-09 through
+--   2026-11), which is roughly one month of runway past the date it was written.
+--   That made the not-yet-built partition-creation job an implicit production
+--   dependency with a one-month fuse. Twelve months of pre-created partitions
+--   removes that fuse: the runway now matches the R6 hot-window length, so the
+--   partition-creation job and the archive job come due at the same time rather
+--   than the former arriving nearly a year early.
+--
+--   Range below: 2026-09-01 .. 2027-10-01, i.e. the current month plus twelve
+--   full months. Empty partitions cost essentially nothing — an empty table and
+--   its inherited indexes, a few kilobytes each — so buying a year of runway is
+--   free. Partition creation is also not idempotent (CREATE TABLE ... PARTITION
+--   OF raises on an existing bound), so the job that extends this must use
+--   CREATE TABLE IF NOT EXISTS or check pg_class first.
+--
+--   [OPEN — Phase 1 follow-up] A RECURRING JOB TO KEEP EXTENDING THIS STILL HAS
+--   TO BE BUILT. It is not built here and it is not a Phase 0 deliverable. What
+--   it must do: run monthly, ensure at least twelve months of partitions exist
+--   ahead of now(), run as a privileged role (never crm_app), be idempotent, and
+--   alert on partition COVERAGE rather than on job success — "the job ran" and
+--   "there is a partition for next month" are different assertions, and only the
+--   second one matters. See architecture note §13. Without that job, this file
+--   has bought twelve months, not forever.
 CREATE TABLE audit_events_2026_09 PARTITION OF audit_events
     FOR VALUES FROM ('2026-09-01 00:00:00+00') TO ('2026-10-01 00:00:00+00');
 CREATE TABLE audit_events_2026_10 PARTITION OF audit_events
     FOR VALUES FROM ('2026-10-01 00:00:00+00') TO ('2026-11-01 00:00:00+00');
 CREATE TABLE audit_events_2026_11 PARTITION OF audit_events
     FOR VALUES FROM ('2026-11-01 00:00:00+00') TO ('2026-12-01 00:00:00+00');
+CREATE TABLE audit_events_2026_12 PARTITION OF audit_events
+    FOR VALUES FROM ('2026-12-01 00:00:00+00') TO ('2027-01-01 00:00:00+00');
+CREATE TABLE audit_events_2027_01 PARTITION OF audit_events
+    FOR VALUES FROM ('2027-01-01 00:00:00+00') TO ('2027-02-01 00:00:00+00');
+CREATE TABLE audit_events_2027_02 PARTITION OF audit_events
+    FOR VALUES FROM ('2027-02-01 00:00:00+00') TO ('2027-03-01 00:00:00+00');
+CREATE TABLE audit_events_2027_03 PARTITION OF audit_events
+    FOR VALUES FROM ('2027-03-01 00:00:00+00') TO ('2027-04-01 00:00:00+00');
+CREATE TABLE audit_events_2027_04 PARTITION OF audit_events
+    FOR VALUES FROM ('2027-04-01 00:00:00+00') TO ('2027-05-01 00:00:00+00');
+CREATE TABLE audit_events_2027_05 PARTITION OF audit_events
+    FOR VALUES FROM ('2027-05-01 00:00:00+00') TO ('2027-06-01 00:00:00+00');
+CREATE TABLE audit_events_2027_06 PARTITION OF audit_events
+    FOR VALUES FROM ('2027-06-01 00:00:00+00') TO ('2027-07-01 00:00:00+00');
+CREATE TABLE audit_events_2027_07 PARTITION OF audit_events
+    FOR VALUES FROM ('2027-07-01 00:00:00+00') TO ('2027-08-01 00:00:00+00');
+CREATE TABLE audit_events_2027_08 PARTITION OF audit_events
+    FOR VALUES FROM ('2027-08-01 00:00:00+00') TO ('2027-09-01 00:00:00+00');
+CREATE TABLE audit_events_2027_09 PARTITION OF audit_events
+    FOR VALUES FROM ('2027-09-01 00:00:00+00') TO ('2027-10-01 00:00:00+00');
+
+-- Partition-coverage check. Should report at least 12 months of headroom; this
+-- is the assertion the monitoring described above must make, and the one the
+-- Phase 0 acceptance test checks (see docs/ROADMAP.md).
+--
+-- SELECT max(upper_bound) AS covered_through,
+--        max(upper_bound) - now() AS runway
+-- FROM (
+--   SELECT (regexp_match(pg_get_expr(c.relpartbound, c.oid),
+--                        'TO \(''([^'']+)''\)'))[1]::timestamptz AS upper_bound
+--   FROM pg_class c
+--   JOIN pg_inherits i ON i.inhrelid = c.oid
+--   JOIN pg_class p ON p.oid = i.inhparent
+--   WHERE p.relname = 'audit_events'
+-- ) b;
 
 COMMENT ON TABLE audit_events IS
 'R6 event-based audit log. Append-only; a rolling 12-month hot window of monthly
@@ -1810,6 +2155,20 @@ CREATE POLICY tenant_isolation ON lead_loss_reasons
     USING (tenant_id = app_current_tenant_id())
     WITH CHECK (tenant_id = app_current_tenant_id());
 
+-- deal_stages (R4 master) ------------------------------------------------------
+ALTER TABLE deal_stages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE deal_stages FORCE  ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON deal_stages
+    USING (tenant_id = app_current_tenant_id())
+    WITH CHECK (tenant_id = app_current_tenant_id());
+
+-- deal_loss_reasons (R4 master) ------------------------------------------------
+ALTER TABLE deal_loss_reasons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE deal_loss_reasons FORCE  ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON deal_loss_reasons
+    USING (tenant_id = app_current_tenant_id())
+    WITH CHECK (tenant_id = app_current_tenant_id());
+
 -- audit_events ----------------------------------------------------------------
 -- Declared on the partitioned parent; inherited by every partition, including
 -- ones created in the future by the partition-management job.
@@ -1866,9 +2225,11 @@ CREATE POLICY tenant_isolation ON audit_events
 -- This query is the seed of the CI lint described in the architecture note §10.
 -- It returns one row per violation and should return ZERO rows. Wiring it into
 -- CI so a non-empty result fails the build should be the first task of Phase 1 —
--- it is far cheaper to add now, with 18 tables, than after 180. Note that the
--- four R4 master tables added in §5 needed no change to this query and no new
--- exception: that is the test of whether a pattern is actually uniform.
+-- it is far cheaper to add now, with 20 tables, than after 180. Note that the
+-- six R4 master tables in §5 needed no change to this query and no new
+-- exception — including deal_stages and deal_loss_reasons, added a round later
+-- by someone who only had the pattern to copy. That is the test of whether a
+-- pattern is actually uniform: the second person to use it changes nothing.
 --
 -- Note it catches BOTH silent failure modes: a missing tenant_id column, and a
 -- tenant_id column with no policy protecting it. The second is the more
@@ -2053,9 +2414,10 @@ COMMENT ON FUNCTION provision_tenant_rbac_defaults(uuid) IS
 -- -----------------------------------------------------------------------------
 -- 9.2 Default master data (R4)
 -- -----------------------------------------------------------------------------
--- [DECIDED, R4] Every tenant is seeded with a working set of sources, statuses,
--- stages and loss reasons at provisioning, so a new workspace can capture its
--- first lead without configuring anything — the same "defaults ship, tenants
+-- [DECIDED, R4] Every tenant is seeded with a working set of lead sources, lead
+-- statuses, lead stages, lead loss reasons, deal stages and deal loss reasons at
+-- provisioning, so a new workspace can capture its first lead and work its first
+-- deal without configuring anything — the same "defaults ship, tenants
 -- customise" shape as R2 roles.
 --
 -- All seeded rows are is_system = true, which means: renameable, reorderable and
@@ -2151,12 +2513,60 @@ BEGIN
         ('other',              'Other',                80, true)
     ) AS v(code, label, sort_order, requires_note)
     ON CONFLICT (tenant_id, code) DO NOTHING;
+
+    -- ---- Deal stages ---------------------------------------------------------
+    -- [Q17] The SALES pipeline, seeded separately from the lead pipeline above
+    -- and deliberately DIFFERENT from it — a deal starts where a lead ends. If
+    -- these two lists were seeded identically it would be a signal that they did
+    -- not need to be two tables; they are not identical, which is the point.
+    -- stage_type is the only part the product reads: won = 100%, lost = 0%, as
+    -- the deal_stages_terminal_probability CHECK also enforces.
+    INSERT INTO deal_stages (tenant_id, code, label, sort_order,
+                             stage_type, probability_pct, is_system)
+    SELECT p_tenant_id, v.code, v.label, v.sort_order,
+           v.stage_type, v.probability_pct, true
+    FROM (VALUES
+        ('qualification',  'Qualification',  10, 'open', 20),
+        ('needs_analysis', 'Needs Analysis', 20, 'open', 30),
+        ('proposal_sent',  'Proposal Sent',  30, 'open', 50),
+        ('negotiation',    'Negotiation',    40, 'open', 75),
+        ('contract_sent',  'Contract Sent',  50, 'open', 90),
+        ('closed_won',     'Closed Won',     60, 'won',  100),
+        ('closed_lost',    'Closed Lost',    70, 'lost', 0)
+    ) AS v(code, label, sort_order, stage_type, probability_pct)
+    ON CONFLICT (tenant_id, code) DO NOTHING;
+
+    -- ---- Deal loss reasons ---------------------------------------------------
+    -- [Q17] Commercial post-mortem reasons for a QUALIFIED deal, distinct from
+    -- the lead loss reasons above (which are about whether an opportunity was
+    -- ever real). 'lost_to_competitor' and 'missing_capability' require a note:
+    -- "we lost to a competitor" without naming which one, and "we were missing a
+    -- capability" without naming which, are the two data points that most often
+    -- get collected and then cannot be acted on.
+    INSERT INTO deal_loss_reasons (tenant_id, code, label, sort_order,
+                                   requires_note, is_system)
+    SELECT p_tenant_id, v.code, v.label, v.sort_order, v.requires_note, true
+    FROM (VALUES
+        ('price',               'Price',                     10, false),
+        ('lost_to_competitor',  'Lost to Competitor',        20, true),
+        ('missing_capability',  'Missing Capability',        30, true),
+        ('no_decision',         'No Decision / Stalled',     40, false),
+        ('budget_withdrawn',    'Budget Withdrawn',          50, false),
+        ('timing',              'Timing',                    60, false),
+        ('built_internally',    'Chose to Build Internally', 70, false),
+        ('other',               'Other',                     80, true)
+    ) AS v(code, label, sort_order, requires_note)
+    ON CONFLICT (tenant_id, code) DO NOTHING;
 END;
 $$;
 
 COMMENT ON FUNCTION provision_tenant_master_data(uuid) IS
 'Seeds the R4 master/lookup data for a newly provisioned tenant: lead sources,
- statuses, stages and loss reasons. All seeded rows are is_system = true —
+ lead statuses, lead stages, lead loss reasons, deal stages and deal loss reasons
+ — six tables, 46 rows per tenant. The deal masters are separate from the lead
+ masters on purpose (architecture note Q17): a lead''s stages are pre-sales
+ qualification, a deal''s stages are the sales pipeline itself.
+ All seeded rows are is_system = true —
  renameable, reorderable and deactivatable by the tenant, but not deletable and
  not re-codable, because application logic and saved reports key on `code`.
  Retiring a value is is_active = false, never DELETE: historical records keep
@@ -2168,14 +2578,24 @@ COMMENT ON FUNCTION provision_tenant_master_data(uuid) IS
 -- =============================================================================
 -- END — Phase 0 schema
 --
--- Tables: 18 (tenants, subscriptions, feature_entitlements, usage_counters,
+-- Tables: 20 (tenants, subscriptions, feature_entitlements, usage_counters,
 --             overage_line_items, roles, permissions, role_permissions, users,
 --             user_roles, user_mfa_methods, user_recovery_codes, sessions,
 --             lead_sources, lead_statuses, lead_stages, lead_loss_reasons,
---             audit_events)
--- R1 conformance: 18 / 18 carry a NOT NULL tenant_id; 18 / 18 have RLS ENABLEd,
+--             deal_stages, deal_loss_reasons, audit_events)
+--             + 13 audit_events monthly partitions (2026-09 .. 2027-09), which
+--               inherit the parent's tenant_id, RLS and policy and are therefore
+--               excluded from the R1 lint's table set rather than exempted.
+-- R1 conformance: 20 / 20 carry a NOT NULL tenant_id; 20 / 20 have RLS ENABLEd,
 --                 FORCEd, and a tenant_isolation policy attached. No exceptions.
--- R4: 4 master tables, zero ENUM types in this schema.
--- R5: custom_attributes jsonb on tenants, users and all 4 master tables;
+-- R4: 6 master tables (4 lead + 2 deal), zero ENUM types in this schema.
+-- R5: custom_attributes jsonb on tenants, users and all 6 master tables;
 --     MANDATORY on every CRM business object created in Phase 1.
+-- R6: 12 months of audit partition runway pre-created past the current month.
+--     The recurring job that extends it is a Phase 1 deliverable and does not
+--     exist yet — see the partition-runway note in §6.
+--
+-- DEFERRED TO PHASE 2, deliberately absent from this file:
+--   Q20 — GIN indexes on custom_attributes / audit_events.payload.
+--   Q21 — the custom_field_definitions registry that types and validates R5.
 -- =============================================================================

@@ -537,8 +537,10 @@ by type or actor, newest first."* So the primary index is a composite on
 GIN index on the JSONB payload is deliberately **not** added in Phase 0 — it is expensive to
 maintain on a write-heavy append-only table, and should be added only when a real query
 demands it. The same reasoning applies to the R5 `custom_attributes` columns
-([§9.2](#92-r5--custom-fields-from-day-one)), and both are tracked as one deferred decision
-(Q20) rather than two independent guesses.
+([§9.2](#92-r5--custom-fields-from-day-one)), and both are tracked as one decision (Q20)
+rather than two independent guesses. **Q20 is now scheduled, not open: it is deferred to
+Phase 2** ([§11.4](#114-deferred-to-phase-2)), which is the first point at which live Phase 1
+business objects will have produced the slow-query data the decision needs.
 
 ### 8.3 Retention — decided: 12 months hot, then S3
 
@@ -572,11 +574,18 @@ S3 objects, one atomic hand-off.
 Phase 0 deliverable.** What must be true of it is recorded now so the requirements are not
 re-derived later:
 
-- It creates next month's partition **ahead of time**. If it does not run, inserts beyond
-  the last declared partition fail — which is intentional. A `DEFAULT` partition is
-  deliberately not used: it would silently absorb those rows and hide the failure until the
-  default partition is enormous and cannot be split without an exclusive lock. Monitor
-  partition *coverage*, not just job success.
+- It keeps **at least twelve months of partitions declared ahead of `now()`**. If coverage
+  runs out, inserts beyond the last declared partition fail — which is intentional. A
+  `DEFAULT` partition is deliberately not used: it would silently absorb those rows and hide
+  the failure until the default partition is enormous and cannot be split without an
+  exclusive lock. Monitor partition *coverage*, not just job success — "the job ran" and
+  "there is a partition for next month" are different assertions and only the second one
+  matters.
+
+  **The schema now pre-creates thirteen monthly partitions (2026-09 through 2027-09),** so
+  the runway matches the twelve-month hot window rather than expiring a month after the file
+  was written. That removes the job's status as a near-term production dependency, but it
+  does not remove the job: see [§13](#13-what-phase-1-should-pick-up-first).
 - It **exports before it drops, and verifies the export before it drops.** Drop-then-
   discover-the-dump-failed is unrecoverable.
 - It is **idempotent and safely re-runnable**.
@@ -608,24 +617,89 @@ the line between them, because the failure mode of these two rules is using the 
 
 ### 9.1 R4 — master tables, not enums
 
-**DECIDED — lead sources, stages, statuses and reasons are rows in tenant-scoped master
+**DECIDED — sources, stages, statuses and reasons are rows in tenant-scoped master
 tables. Never PostgreSQL `ENUM` types, and never a `CHECK`-constrained text column either.**
 
-Phase 0 adds four, following the R1 pattern exactly (`tenant_id NOT NULL REFERENCES
+Phase 0 has **six**, following the R1 pattern exactly (`tenant_id NOT NULL REFERENCES
 tenants(id)`, RLS enabled *and* forced, `UNIQUE (tenant_id, id)` so referencing tables can
 use composite foreign keys):
 
-| Table | Answers |
-|---|---|
-| `lead_sources` | Where did this lead come from? |
-| `lead_statuses` | What state is this lead *record* in — has anyone worked it? |
-| `lead_stages` | Where is it in the sales *pipeline* — how close is it to closing? |
-| `lead_loss_reasons` | Why was it lost? |
+| Table | Answers | Added |
+|---|---|---|
+| `lead_sources` | Where did this lead come from? | R4 round |
+| `lead_statuses` | What state is this lead *record* in — has anyone worked it? | R4 round |
+| `lead_stages` | Where is it in the **pre-sales qualification** pipeline? | R4 round |
+| `lead_loss_reasons` | Why did this enquiry never become an opportunity? | R4 round |
+| `deal_stages` | Where is this deal in the **sales pipeline** — how close is it to money? | Q17 round |
+| `deal_loss_reasons` | Why was this qualified deal lost? | Q17 round |
 
 Each carries the same shape: `id`, `tenant_id`, `code` (stable machine key), `label`
 (renameable display text), `description`, `sort_order`, `is_active`, `is_system`,
-`custom_attributes`, timestamps. All four are seeded per tenant at provisioning by
-`provision_tenant_master_data()`.
+`custom_attributes`, timestamps. All six are seeded per tenant at provisioning by
+`provision_tenant_master_data()` — 46 rows per tenant.
+
+#### Why leads and deals do not share a stage vocabulary (Q17, resolved)
+
+`lead_stages` and `deal_stages` are **structurally identical and semantically different**,
+and that difference is the whole reason they are two tables.
+
+A **lead's** stages are *pre-sales qualification*. They answer "is there a real opportunity
+here at all?" — an unqualified enquiry being worked toward the moment it becomes, or fails
+to become, a deal. The terminal state is a judgment about the lead's validity: converted, or
+discarded. A **deal's** stages are *the sales pipeline itself*. They answer "how close is
+this known-real opportunity to money?" — proposal, negotiation, contract, closed. The
+terminal state is a commercial outcome: revenue booked, or revenue lost.
+
+Different lifecycles, different owners (SDR versus AE), different reporting, different rates
+of change. Forcing them onto one list reproduces exactly the defect §5.2 of the schema warns
+about when `lead_statuses` and `lead_stages` are merged: a single axis that cannot represent
+two independent facts. Three concrete symptoms of the merged version:
+
+- One picker containing both an SDR's "Qualification" and an AE's "Negotiation", where every
+  lead report must exclude the deal-only values and every deal report the lead-only ones.
+- A tenant reordering their sales pipeline silently reorders their lead pipeline.
+- **Lead→deal conversion rate becomes uncomputable.** It is a rate *between* two pipelines;
+  if they are one pipeline there is nothing to measure across.
+
+The same split applies to loss reasons, and bites harder there because these are the two
+most-reported-on vocabularies in a CRM and they feed different decisions. Lead loss reasons
+("went unresponsive", "duplicate record", "not a fit") tune marketing spend and lead
+qualification. Deal loss reasons ("lost to competitor", "missing capability", "budget
+withdrawn") tune pricing, product and competitive positioning. Merged, they produce one "why
+we lose" report that answers neither question — with "Duplicate Record" appearing in a
+competitive win/loss review as the visible symptom.
+
+Cost accepted: two lists to configure instead of one, and two more seeding blocks. That is
+the correct trade against a vocabulary that is wrong for both objects. The seeded defaults
+are deliberately *different* between the two — if they had come out identical, that would
+have been evidence they did not need to be two tables.
+
+**Deliberately NOT added: `deal_sources` and `deal_statuses`.** Q17 asked only about stages
+and loss reasons; the symmetric question was considered and answered no, rather than either
+silently adding two tables or silently not thinking about it.
+
+- **No `deal_sources`.** `lead_sources` is an *acquisition-attribution* vocabulary — where
+  the business came from. That question is asked once, at first contact, and its answer does
+  not change when a lead becomes a deal. A second list would be the same vocabulary
+  maintained twice, guaranteed to drift, and attribution reporting would then have to
+  reconcile "Referral" against "Referral" across two tables. Phase 1 `deals` should carry the
+  source through from the originating lead. Two consequences are left to Phase 1, recorded as
+  **Q23**: whether `lead_sources` wants an object-neutral name once a second object
+  references it, and how a deal created with no originating lead gets a source.
+- **No `deal_statuses`.** A lead needs both a status and a stage because they are genuinely
+  independent axes — "has anyone worked this record" is not "how close is it to closing", and
+  a lead can be Contacted *and* in Qualification. A deal has no such second axis: its record
+  state *is* its pipeline position, and the terminal semantics a status would carry
+  (`lead_statuses.is_terminal`) are already carried by `deal_stages.stage_type IN
+  ('won','lost')`. Adding one would recreate the one-concept-two-lists confusion, whose first
+  symptom is a deal whose status says Open and whose stage says Closed Won. What *would*
+  change this: a deal lifecycle genuinely orthogonal to the pipeline — an approval workflow,
+  or contract execution state. If Phase 1 needs one, it should be a new master named after
+  the question (`deal_approval_states`), not a `deal_statuses` table named after the symmetry
+  with leads.
+
+Both of those are **judgment calls made here, not instructions received** — flagged for the
+project owner rather than buried.
 
 #### Why this beats an enum
 

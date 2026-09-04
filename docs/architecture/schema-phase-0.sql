@@ -22,7 +22,9 @@
 -- HOW TO READ THE COMMENTS
 --   [DECIDED]     Settled. Downstream work should not relitigate.
 --   [JUDGMENT]    A call made here beyond what the brief specified. Reviewable.
---   [OPEN]        Explicitly unresolved. See the architecture note §10.
+--   [RESOLVED]    Was open in the first pass; answered by the project owner and
+--                 integrated here. See the architecture note §11.1.
+--   [OPEN]        Explicitly unresolved. See the architecture note §11.
 -- =============================================================================
 
 
@@ -175,7 +177,7 @@ CREATE TABLE tenants (
     -- carving out an exception, tenant_id here is a STORED generated column that
     -- always equals id.
     --   Why bother: it means R1 has ZERO exceptions, so the CI lint described in
-    --   the architecture note §9 is a flat "every table in this schema has a
+    --   the architecture note §10 is a flat "every table in this schema has a
     --   non-null tenant_id column with an RLS policy on it" — no allowlist to
     --   maintain, and therefore no allowlist for someone to quietly add to. It
     --   also lets the isolation policy below be *literally identical* to every

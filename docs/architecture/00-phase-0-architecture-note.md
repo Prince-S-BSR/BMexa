@@ -420,7 +420,7 @@ For a limited resource (seats, contacts, API calls):
 3. **Decide** based on `soft_stop`:
    - `soft_stop = true` → **allow the action.** If usage now exceeds `limit_value`, record
      the excess as billable overage at `overage_unit_price`. Surface an in-app warning; do
-     not block — *until the ceiling in §7.2*.
+     not block — until the ceiling in [§7.2](#72-the-150-ceiling).
    - `soft_stop = false` → hard cap. Reject with a clear upgrade path. This exists because a
      few limits genuinely must be hard (anything with an unbounded cost tail — outbound
      email volume, storage — where "we'll bill you" is not a real answer at 100x). R3 makes
@@ -536,7 +536,9 @@ by type or actor, newest first."* So the primary index is a composite on
 `(tenant_id, occurred_at DESC)`, with supporting indexes for type and actor filters. A
 GIN index on the JSONB payload is deliberately **not** added in Phase 0 — it is expensive to
 maintain on a write-heavy append-only table, and should be added only when a real query
-demands it.
+demands it. The same reasoning applies to the R5 `custom_attributes` columns
+([§9.2](#92-r5--custom-fields-from-day-one)), and both are tracked as one deferred decision
+(Q20) rather than two independent guesses.
 
 ### 8.3 Retention — decided: 12 months hot, then S3
 
@@ -937,9 +939,28 @@ Findings that came out of running it rather than reading it, all now fixed in th
 
 ---
 
-## 12. What Phase 1 should pick up first
+## 13. What Phase 1 should pick up first
 
-1. The **R1/RLS CI lint** ([§9](#9-r1-enforcement)) — before there are many tables to retrofit.
-2. The **data-access layer** with the `SET LOCAL` choke point ([§3.3](#33-how-rls-is-actually-enforced-per-request)) — before any feature code establishes a habit of bypassing it.
-3. The **cross-tenant isolation integration test** ([§9](#9-r1-enforcement)).
-4. An answer to **Q1** (audit retention) and **Q2** (default roles).
+1. The **R1/RLS CI lint** ([§10](#10-r1-enforcement)) — before there are many tables to
+   retrofit. It should also assert **zero `ENUM` types** in the application schema, which is
+   R4 made mechanical rather than remembered.
+2. The **data-access layer** with the `SET LOCAL` choke point ([§3.3](#33-how-rls-is-actually-enforced-per-request))
+   — before any feature code establishes a habit of bypassing it.
+3. The **cross-tenant isolation integration test** ([§10](#10-r1-enforcement)).
+4. The **CRM business objects** (`contacts`, `companies`, `leads`, `deals`, `activities`),
+   each created with `custom_attributes` per R5 ([§9.2](#92-r5--custom-fields-from-day-one))
+   and referencing the R4 masters through composite, `ON DELETE RESTRICT` foreign keys
+   ([§9.1](#91-r4--master-tables-not-enums)). Getting this right in the DDL that creates the
+   tables is far cheaper than retrofitting it afterwards — which is the entire reason both
+   patterns were fixed in Phase 0.
+5. The **entitlement guard** implementing the enforcement order in the `feature_entitlements`
+   table comment, including the 150% hard block and the notifications that make it defensible
+   ([§7.2](#72-the-150-ceiling)).
+6. An answer to **Q2** (default roles) and **Q6** (permission catalogue) — the two remaining
+   items that are expensive to change once tenants exist, because both are seeded per tenant.
+
+Not Phase 1, but do not lose it: the **audit archive job** ([§8.3](#83-retention--decided-12-months-hot-then-s3)).
+The retention policy is decided and the partitioning is in place, but the job that exports to
+S3 and drops the aging partition does not exist. It has roughly eleven months of runway from
+first production write before it is needed, and exactly one month of runway before the
+*partition-creation* half of it is needed.

@@ -903,18 +903,23 @@ schema file**, not merely noted here.
 | Q2 | **Exact default RBAC role list.** Proposed: `owner`, `admin`, `manager`, `member`, `read_only`. Which map to "executive" (`requires_2fa = true`)? Currently `owner` and `admin`; is `manager` in or out? | Seeded into every new tenant; changing it later means migrating existing tenants. |
 | Q6 | **Which permissions exist in the Phase 0 catalogue?** The schema seeds a starting set. | Tenants compose roles from this vocabulary; gaps block real workflows. |
 
-### 11.3 New follow-ups created by the resolutions above
+### 11.3 Follow-ups raised by the resolutions above
 
-These did not exist before this round. They are **consequences of the answers**, not
-leftovers from them, and they are recorded rather than quietly decided.
+These did not exist before the R4/R5 round — they are **consequences of the answers**, not
+leftovers from them. Four have since been actioned; one remains open and one is scheduled.
 
-| # | Question | Why it is not being decided now |
+| # | Question | Status |
 |---|---|---|
-| Q17 | **Do Phase 1 deals reuse `lead_stages` / `lead_loss_reasons`, or get their own `deal_stages` / `deal_loss_reasons` masters?** | Naming here follows the owner's vocabulary (`lead_*`). A CRM usually has both a lead pipeline and a deal pipeline, and whether they share one stage list is a product question about how the two objects relate — which is settled when `deals` is designed, not before. |
-| Q18 | **Confirm the seeded default master values** (10 sources, 7 statuses, 6 stages, 8 loss reasons) and which, if any, should differ by industry vertical. | Deliberately low-stakes: unlike the RBAC defaults, a wrong default here is a tenant-editable row, so correcting it is a rename rather than a migration. That asymmetry is most of the point of R4. |
-| Q19 | **The S3 audit-archive job: exact storage class and lifecycle transitions, archive file format (Parquet for Athena queryability vs. JSONL for simplicity), the legally required retention floor in the archive, and where the job runs** (EventBridge → Lambda vs. scheduled ECS task). | The *policy* is decided ([§8.3](#83-retention--decided-12-months-hot-then-s3)); the *implementation* is a later-phase task. Format in particular should follow from who will read the archive and how often — an answer nobody has yet. |
-| Q20 | **When to add a GIN index on `custom_attributes`, and on which tables.** | Needs real query patterns. A GIN index is paid on every write to serve reads nobody has issued; the right index is often a narrower expression index on the two or three keys actually filtered on. Revisit once the Phase 1 business objects are live and there is slow-query data. See [§9.2](#92-r5--custom-fields-from-day-one). |
-| Q21 | **The per-tenant custom-field definition registry** — which keys exist, their types, whether they are required, and how the UI renders them. | R5 stores the values; something has to describe and validate them. This is a Phase 1 table, and designing it before there is a business object to attach fields to would be guessing. |
+| Q17 | Do deals reuse `lead_stages` / `lead_loss_reasons`, or get their own masters? | **RESOLVED — separate masters.** `deal_stages` and `deal_loss_reasons` now exist alongside the lead masters ([§9.1](#91-r4--master-tables-not-enums), schema §5.5–5.6). A lead stage and a deal stage are structurally identical and semantically different: sharing one list would force one team's pipeline edits onto the other's reporting, and the two lists diverge the first time anyone customises either. Separate tables cost four near-identical DDL blocks and buy independent vocabularies. |
+| Q18 | Confirm the seeded default master values, and whether any should differ by industry vertical. | **Still open.** Deliberately low-stakes: unlike the RBAC defaults, a wrong default here is a tenant-editable row, so correcting it is a rename rather than a migration. That asymmetry is most of the point of R4. |
+| Q19 | The S3 audit-archive job: storage class, lifecycle transitions, archive format, retention floor, and where the job runs. | **Partly resolved; the urgent half is done.** Twelve months of `audit_events` partitions are now pre-created through 2027-09 ([§8.3](#83-retention--decided-12-months-hot-then-s3)), which removes the one-month failure cliff — inserts can no longer fall off the end of the declared range while the job is unwritten. The *archive* half (dump to S3, verify, drop) remains a Phase 2 build, and the format/storage-class/retention-floor questions stay open with it. |
+| Q20 | When to add a GIN index on `custom_attributes` (and `audit_events.payload`), and on which tables. | **DEFERRED TO PHASE 2 — scheduled, not open.** It is not a question anyone can answer today: a GIN index is paid on every write to serve reads nobody has issued, and the right index is often a narrower expression index on the two or three keys actually filtered on. Phase 2 is where the business objects have been live long enough to produce slow-query data. Documented as deferred in the schema (§0.3, §6) rather than left as a lingering "maybe". |
+| Q21 | The per-tenant custom-field definition registry — which keys exist, their types, whether they are required, how the UI renders them. | **DEFERRED TO PHASE 2 — scheduled, not open.** R5 stores the values; this registry is what types and validates them. Designing it before Phase 1's business objects exist would mean guessing at its own shape. Documented as deferred in the schema (§0.3). |
+
+The distinction between **open** and **deferred** in that table is load-bearing and worth
+keeping: an open item is waiting on a decision someone could make today, and a deferred item
+is waiting on *information that does not exist yet*. Chasing the second kind early produces
+confident guesses, which are worse than an empty slot because they get built on.
 
 ### 11.4 Deferred — decide before GA
 
@@ -1034,7 +1039,12 @@ Findings that came out of running it rather than reading it, all now fixed in th
    items that are expensive to change once tenants exist, because both are seeded per tenant.
 
 Not Phase 1, but do not lose it: the **audit archive job** ([§8.3](#83-retention--decided-12-months-hot-then-s3)).
-The retention policy is decided and the partitioning is in place, but the job that exports to
-S3 and drops the aging partition does not exist. It has roughly eleven months of runway from
-first production write before it is needed, and exactly one month of runway before the
-*partition-creation* half of it is needed.
+The retention policy is decided, and thirteen monthly partitions are now pre-created through
+**2027-09**, which buys the runway — the original one-month cliff, where inserts would start
+failing the moment `occurred_at` ran past the last declared partition, is gone. What does not
+exist is the job that creates *further* partitions ahead of time and exports-then-drops the
+aging ones. Two dates to hold: the export half is not needed until roughly twelve months
+after first production write, but **the partition-creation half must be running well before
+2027-09**, and a pre-created runway is exactly the kind of cushion that gets silently consumed
+because nothing complains until it is empty. Monitor partition coverage as a metric, not the
+job's exit code.

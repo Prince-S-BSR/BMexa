@@ -354,7 +354,10 @@ Mechanics:
   **revocation** — "log out all devices", forced logout on role change, and forced logout on
   2FA enrolment. A stateless JWT cannot be revoked before its expiry without a
   denylist, which is a session table with extra steps.
-- Cookie is `HttpOnly`, `Secure`, `SameSite=Lax`, scoped to the tenant subdomain ([§4.3](#43-cookies)).
+- Token is an opaque bearer credential sent via `Authorization: Bearer <token>` — never a
+  cookie. Looked up against the `sessions` table on every request (see
+  [Why opaque Bearer tokens over JWT](#why-opaque-bearer-tokens-over-jwt-mobile-prep-phase-8)
+  below for why this is a deliberate choice, not an omission).
 - `sessions` is tenant-scoped and carries `tenant_id` (R1).
 - Session validation checks both `expires_at` and a `revoked_at` null-check.
 
@@ -414,18 +417,18 @@ JWT-shaped requirement appears later (for example, a third-party service needing
 token without calling back into this API), that is a new, deliberate architecture decision for
 the project owner to make explicitly — not a refactor to fold into unrelated work.
 
-**A pre-existing discrepancy surfaced by this check, flagged rather than silently fixed:** the
-Mechanics list above still describes the session cookie (`HttpOnly`, `Secure`, `SameSite=Lax`,
-scoped per subdomain) that this note's original §2.1 single-Next.js-deployable shape (`A1`)
-assumed. `apps/api` was built as a separate Fastify service and does not use that cookie at
-all — it authenticates the same `sessions` table via the Bearer token described above instead.
-The two transports are equally compatible with the session model documented here (the
-revocation and absolute-expiry guarantees apply identically regardless of how the token reaches
-the server), so this is a transport detail, not a session-model change, and nothing needed
-correcting for Phase 8's purposes. Reconciling `A1` against the now-real, separate `apps/api`
-service — i.e., whether the cookie transport in the Mechanics list still applies to anything, or
-should be rewritten to describe Bearer-only — is a separate architecture question left for the
-project owner, outside this task's scope.
+**A pre-existing discrepancy this check surfaced has now been corrected, not just flagged:**
+the Mechanics list above used to describe a session cookie (`HttpOnly`, `Secure`,
+`SameSite=Lax`, scoped per subdomain) inherited from this note's original §2.1
+single-Next.js-deployable shape (`A1`). `apps/api` was built as a separate Fastify service and
+never used that cookie at all — it authenticates against the same `sessions` table via the
+Bearer token described above instead. The Mechanics list has been rewritten to describe that
+Bearer-token transport directly, so it no longer conflicts with this subsection. This was a
+wording fix only, not a session-model change: the revocation and absolute-expiry guarantees
+apply identically regardless of how the token reaches the server. The broader question of
+reconciling `A1`'s single-deployable assumption against the now-real, separate `apps/api`
+service remains open and is unaffected by this fix — that is still a separate architecture
+question left for the project owner, outside this task's scope.
 
 *(No corresponding line was added to `ENGINEERING_RULES.md`: that document is structured
 strictly around R1–R6 plus the reserved, explicitly-not-to-be-filled R7–R11 and the process

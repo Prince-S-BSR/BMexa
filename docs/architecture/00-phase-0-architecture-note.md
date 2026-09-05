@@ -361,6 +361,79 @@ Mechanics:
 The `sessions` table was not in the Phase 0 brief's table list, but it is required by this
 decision and is now a settled part of the design.
 
+#### Why opaque Bearer tokens over JWT (mobile prep, Phase 8)
+
+**DECIDED — the token stays an opaque, server-side session reference, looked up per request
+against the `sessions` table. Stateless, self-contained JWTs were considered for Phase 8
+mobile prep and explicitly rejected.** This is a documented, deliberate decision — a future
+session should not relitigate it or "fix" it into JWT without reading the tradeoff below.
+
+Phase 8's mobile-app prep only asked one real question of this design: does the existing auth
+model work for a native client that cannot rely on a cookie jar? The answer is yes, without a
+redesign — `apps/api`'s auth already runs on an `Authorization: Bearer <token>` header (see
+`apps/api/src/middleware/session-context.ts`), never a cookie, so it already satisfies the
+actual mobile requirement as-is. Verified directly as part of this prep work: grepping
+`apps/api` for `cookie`, `set-cookie`, `setCookie`, and `fastify-cookie`/`@fastify/cookie`
+returns zero matches, and the package has no cookie-plugin dependency. There was nothing to
+fix here.
+
+The natural follow-on question — "since we're touching auth for mobile, should we also switch
+to stateless JWTs?" — was asked directly of the project owner and answered no, for one reason:
+it would break a guarantee that is already built and already tested, in exchange for nothing
+the mobile requirement actually needs.
+
+- **Revocation is the load-bearing guarantee, and JWTs don't have it for free.** "Log out all
+  devices," forced logout on role change, and forced logout on 2FA enrollment (this section
+  and [§6.2](#62-two-factor-authentication)) all depend on the server being able to invalidate
+  a session before its stated expiry. A self-contained JWT cannot be revoked once issued — the
+  only way to add revocation to a stateless JWT is a denylist, which is a `sessions` table with
+  extra steps and an extra piece of infrastructure (typically a Redis-backed blocklist) kept in
+  sync with it. Migrating to JWT would not remove the per-request database check this design
+  already does; it would keep an equivalent check and add a second store on top of it. That is
+  strictly more moving parts for the same guarantee, not a simpler design.
+- **The guarantee is not hypothetical — it is asserted by name in the existing test suite.**
+  `apps/api/test/session-context.test.ts` asserts "a revoked session is rejected with 401, even
+  though the token itself is well-formed." `apps/api/test/r2-dynamic-rbac.test.ts` goes
+  further, asserting that revoking a permission mid-test blocks the very next request on the
+  *same already-authenticated session* — no relogin, no restart — which only works because
+  every request re-reads role/permission state from the database rather than trusting claims
+  embedded at issuance. A JWT signs its claims once, at issuance; those claims go stale the
+  instant a role is edited or a permission is revoked, which is precisely the behavior R2's
+  dynamic-RBAC tests exist to rule out. Switching to JWT would either reintroduce a database
+  check on every request to cover this gap — at which point the JWT carries no benefit over the
+  opaque token, only its added complexity — or silently regress an already-tested guarantee.
+- **Mobile does not, on its own, need JWT.** It needs an `Authorization` header and no
+  dependency on cookies, both of which this design already provides. No requirement in Phase
+  8's scope (offline token validation, cross-service trust without a shared database, etc.)
+  would justify paying the revocation cost above to get there.
+
+**What this changes in the running system: nothing.** No code in `apps/api` changed as part of
+this decision — this subsection documents a decision *not* to change
+`session-context.ts`, the `sessions` table, or `resolve_session_context()`. If a genuinely
+JWT-shaped requirement appears later (for example, a third-party service needing to verify a
+token without calling back into this API), that is a new, deliberate architecture decision for
+the project owner to make explicitly — not a refactor to fold into unrelated work.
+
+**A pre-existing discrepancy surfaced by this check, flagged rather than silently fixed:** the
+Mechanics list above still describes the session cookie (`HttpOnly`, `Secure`, `SameSite=Lax`,
+scoped per subdomain) that this note's original §2.1 single-Next.js-deployable shape (`A1`)
+assumed. `apps/api` was built as a separate Fastify service and does not use that cookie at
+all — it authenticates the same `sessions` table via the Bearer token described above instead.
+The two transports are equally compatible with the session model documented here (the
+revocation and absolute-expiry guarantees apply identically regardless of how the token reaches
+the server), so this is a transport detail, not a session-model change, and nothing needed
+correcting for Phase 8's purposes. Reconciling `A1` against the now-real, separate `apps/api`
+service — i.e., whether the cookie transport in the Mechanics list still applies to anything, or
+should be rewritten to describe Bearer-only — is a separate architecture question left for the
+project owner, outside this task's scope.
+
+*(No corresponding line was added to `ENGINEERING_RULES.md`: that document is structured
+strictly around R1–R6 plus the reserved, explicitly-not-to-be-filled R7–R11 and the process
+rule R12, and this decision is a token-transport tradeoff rather than a new rule of that shape.
+There is no existing rule about session/token transport to append a one-line note to without
+either overloading an unrelated rule or inventing content in a reserved slot, which R7–R11
+explicitly forbids. Flagged here rather than force-fit.)*
+
 ### 6.2 Two-factor authentication
 
 **DECIDED — 2FA is mandatory for executive-role users, optional for frontline staff roles.**

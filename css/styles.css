@@ -348,6 +348,13 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.footer-logo {
+  display: block;
+  height: 56px;
+  width: auto;
+  margin: 0 auto 24px;
+}
+
 .footer-inner {
   display: flex;
   flex-wrap: wrap;

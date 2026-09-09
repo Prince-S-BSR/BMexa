@@ -61,7 +61,7 @@ To switch providers later (Mailchimp, Google Sheets, etc.), swap
 
 Live now via **GitHub Pages**, serving directly from the
 `claude/bmexa-waitlist-landing-8f4qxf` branch (Settings → Pages → Deploy from
-a branch): **https://prince-s-bsr.github.io/Final-Verison/**
+a branch): **https://prince-s-bsr.github.io/BMexa/**
 
 Any other static host works too, no build step required — Netlify/Vercel:
 import the repo, leave the build command empty, publish directory `/`.

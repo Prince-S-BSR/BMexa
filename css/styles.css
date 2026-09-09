@@ -430,6 +430,10 @@ body {
     align-items: stretch;
   }
 
+  .email-input {
+    flex: none;
+  }
+
   .btn-primary {
     width: 100%;
   }

@@ -30,9 +30,12 @@ Or open `index.html` directly in a browser — it has no server dependencies.
 ## Structure
 
 ```
-index.html        Page markup (hero, problem, 3 pillars, philosophy, final CTA, footer)
-css/styles.css     All styling, color tokens at the top of the file
-js/main.js         Form validation/submission + scroll-reveal animation
+index.html               Page markup (hero, problem, 3 pillars, philosophy, final CTA, footer)
+css/styles.css           All styling, color tokens at the top of the file
+js/main.js               Form validation/submission + scroll-reveal animation
+assets/logo-icon.png     Header logo tile, cropped from the brand mark artwork
+assets/favicon.png       Browser-tab icon (same mark, smaller)
+assets/social-preview.jpg  Link-preview image (Open Graph / Twitter card)
 ```
 
 ## Wiring up email capture
@@ -68,7 +71,9 @@ Once live, put the URL in the Instagram bio.
 
 - **Colors:** edit the CSS custom properties at the top of `css/styles.css`
   (`--emerald-*`, `--amber*`, `--white*`).
-- **Logo:** the header currently renders a text wordmark (`B` in amber +
-  `Mexa` in white) in `index.html`. Swap the `.logo` markup for an `<img>`
-  once a logo asset exists.
+- **Logo:** `assets/logo-icon.png` is a rounded-square tile cropped from the
+  official BMexa mark artwork, used in the header (`.logo-icon`) and as the
+  favicon/apple-touch-icon. To swap in an updated mark, replace that file
+  (and `assets/favicon.png`, `assets/social-preview.jpg`) — no HTML/CSS
+  changes needed as long as the new files keep the same names.
 - **Copy:** all section copy lives directly in `index.html`.

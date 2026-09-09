@@ -102,8 +102,8 @@ body {
 
 .logo {
   display: inline-flex;
-  align-items: baseline;
-  gap: 2px;
+  align-items: center;
+  gap: 10px;
   text-decoration: none;
   font-family: var(--font-display);
   font-weight: 700;
@@ -111,11 +111,12 @@ body {
   letter-spacing: -0.02em;
 }
 
-.logo-mark {
-  background: var(--brand-gradient);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
+.logo-icon {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  flex-shrink: 0;
 }
 
 .logo-word {

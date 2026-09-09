@@ -103,24 +103,13 @@ body {
 .logo {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
   text-decoration: none;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.5rem;
-  letter-spacing: -0.02em;
 }
 
-.logo-icon {
+.logo-lockup {
   display: block;
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
-  flex-shrink: 0;
-}
-
-.logo-word {
-  color: var(--white);
+  height: 32px;
+  width: auto;
 }
 
 /* ---------- Backgrounds ---------- */

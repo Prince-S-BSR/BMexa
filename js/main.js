@@ -7,7 +7,7 @@
    * Left empty, submissions are stored locally so you can demo the flow
    * before a backend is wired up.
    */
-  var WAITLIST_ENDPOINT = "";
+  var WAITLIST_ENDPOINT = "https://formspree.io/f/xppzkzra";
 
   var EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -73,10 +73,14 @@
         return;
       }
 
+      var formData = new FormData();
+      formData.append("email", email);
+      formData.append("source", source);
+
       fetch(WAITLIST_ENDPOINT, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email, source: source }),
+        headers: { Accept: "application/json" },
+        body: formData,
       })
         .then(function (response) {
           finish(response.ok);

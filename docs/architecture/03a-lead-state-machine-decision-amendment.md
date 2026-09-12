@@ -1,6 +1,13 @@
 # Architecture Decision 01A — Lead State Machine (Amendment to AD-01)
 
-**STATUS: PROPOSED — NOT APPROVED**
+**STATUS: DECISIONS RECORDED (2026-09-12) — AD-01 REMAINS NOT APPROVED FOR IMPLEMENTATION**
+
+> The project owner has reviewed this amendment and issued explicit decisions on all five items
+> below. Those decisions are recorded in **[§8](#8-product-owner-decision-2026-09-12)** and are now
+> the current product-owner position on Q1, Q4, Q7, the sync/verification axis, and the assignment
+> axis. **This does not approve AD-01 for implementation.** Q2, Q3, Q5, Q6, Q8–Q16 (AD-01) and
+> N-1–N-4 (this amendment) remain open, and no schema, SQL, migration or code may be built until the
+> complete model is resolved and approved in writing.
 
 | | |
 |---|---|
@@ -693,7 +700,12 @@ No blocker other than M-1 is touched by this document.
 
 ## 7. Approval
 
-**STATUS: PROPOSED — NOT APPROVED**
+**STATUS (as originally written, prior to §8): PROPOSED — NOT APPROVED**
+
+> **Superseded by [§8](#8-product-owner-decision-2026-09-12).** This section is retained verbatim as
+> the historical record of what was being asked. The product owner has since reviewed and decided
+> §§1–5 as recorded in §8. Read §8 as authoritative; read this section as the request that produced
+> it.
 
 Every recommendation above sits in §88's **MUST ASK BEFORE DECIDING** column — canonical entities,
 relationships, offline business behavior, source-of-truth rules. Specifically:
@@ -710,3 +722,96 @@ relationships, offline business behavior, source-of-truth rules. Specifically:
 Nothing here may be implemented, seeded, migrated to, or treated as settled until the project owner
 approves it in writing. **Delegation to an architect is not authorization.** Per §97: *when in
 doubt, STOP AND ASK.* This document, like AD-01, is the asking.
+
+---
+
+## 8. Product-Owner Decision (2026-09-12)
+
+The project owner has reviewed AD-01 and this amendment (AD-01A) and recorded the following as the
+current product-owner decisions. This section is the authoritative record of what has been decided;
+§§1–5 above remain in place as the reasoning that supports it.
+
+### 8.1 Q1 — Pending
+
+- **Reject** "Pending" as a fifth persisted Lead Lifecycle state.
+- Lead Lifecycle remains **four values: New / Follow-up / Success / Dump.**
+- "Awaiting Response," "Blocked," *Today*, *Future*, and *Overdue* are **operational/Action-Feed
+  conditions**, not Lead Lifecycle states.
+- *Today* / *Future* / *Overdue* must be **derived from next-action timing**, never persisted as
+  lifecycle state.
+- **Do not create** a new persisted "Blocked" lifecycle state.
+
+### 8.2 Q4 — Success milestone
+
+- **Approve** Success at the **Booked / §20 Stage 3** milestone, after the required builder-side
+  booking-verification milestone.
+- **Booking has its own lifecycle/state machine.** The Lead Lifecycle must **not** absorb Booking
+  states such as *Initiated* or *Pending Verification*.
+- A subsequently **cancelled booking must not rewrite** the historical Lead Lifecycle from Success
+  back to Dump. (The cancellation lives on the booking, per §35 and R6 — consistent with §4.6.2's
+  analysis and AD-01 §7 E-15's recommended position.)
+
+### 8.3 Q7 — Dump reason framework
+
+- **Approve** the three-dimensional semantic framework proposed in [§3](#3-q7--a-semantic-framework-for-dump--loss-reasons):
+  (a) opportunity validity class, (b) responsibility locus, (c) recoverability posture.
+- **Do not** invent or finalize arbitrary reason values yet — the dimensions are approved; the
+  tenant-facing reason vocabulary is not.
+- A **terminal non-conversion disposition must carry a reason.**
+- **Preserve the historical reason** on a lead rather than silently rewriting business history.
+
+### 8.4 Sync vs. verification
+
+- **Reject** the combined Sync/Verification axis proposed in AD-01 §5.1.
+- **Approve** sync and verification as **separate concepts**, per [§4](#4-sync--verification-axis-re-examined-split-or-merged).
+- **Successful transport synchronization must never imply successful business verification.**
+- **An online lead may be successfully synchronized while simultaneously being subject to
+  duplicate/clash review** — this is the case the merged axis in AD-01 could not express, and it is
+  now explicitly preserved.
+- The distinction between technical transport state and business verification/conflict state must
+  be preserved throughout the design.
+
+### 8.5 Assignment
+
+- **Eliminate** the persisted Assignment State axis.
+- **Do not create** Unassigned / Assigned / Reassignment Pending as a separate state machine.
+- **Owner, Handler, Assignment History, activities, tasks, and derived completeness/work-queue
+  conditions** should carry this information, **unless a later explicit requirement proves
+  otherwise.**
+- **Do not invent** a reassignment-approval workflow.
+
+### 8.6 Architectural framing — the Orthogonal Lead Model
+
+Per the product owner's direction, the refined result is **no longer referred to simply as
+"Alternative C" without qualification.** Going forward, the conceptual framing is the **Orthogonal
+Lead Model**, comprising:
+
+- **Lead Lifecycle** *(persisted — four values: New / Follow-up / Success / Dump)*
+- **Action / Next-Action conditions** *(derived — §8.1: Today / Future / Overdue / Blocked, computed from next-action timing, not stored)*
+- **Activity history** *(the underlying record §14/§09 already require; source of derived engagement depth, §3.6)*
+- **Assignment data/history** *(derived/log-based — Owner, Handler, Assignment History; §8.5, zero persisted axis values)*
+- **Attribution / Clash** *(persisted, on the attribution-claim entity — unchanged from AD-01 §3.6, §5.1)*
+- **Sync transport state** *(not a lead axis — provenance fact plus the queued-operation record, §4.5, §8.4)*
+- **Verification / Conflict state** *(persisted — the duplicate/clash gate, applying to every lead regardless of origin, §4.5, §8.4)*
+- **Independent Booking lifecycle** *(a separate state machine entirely — §8.2; the Lead Lifecycle references it but does not absorb its states)*
+- **Dump disposition classification** *(the three-dimensional framework, §8.3, §3)*
+
+Prior and future references to "Alternative C — Orthogonal Axes" (in AD-01 and elsewhere in this
+amendment) refer to the same underlying design and should be read as the **Orthogonal Lead Model**
+as refined and decided in this §8.
+
+### 8.7 Scope of this decision — what remains unresolved
+
+- **These decisions approve AD-01A's conclusions only** — §§1–5 above, as recorded in §§8.1–8.5.
+- **AD-01 remains NOT APPROVED FOR IMPLEMENTATION.** No schema, SQL, migrations, or implementation
+  work is authorized by this decision.
+- **No other architecture blocker is resolved by this decision** — the reconciliation report's
+  remaining blockers (M-2 … M-20) are untouched.
+- **AD-01's Q2, Q3, Q5, Q6, Q8–Q16 remain open**, per [§6.3](#63-still-open-from-ad-01-untouched-by-this-amendment).
+  Q6 narrows as described in §2.2 but is not itself decided.
+- **This amendment's N-1, N-2, N-3, N-4 remain open**, per [§6.2](#62-new-questions-this-amendment-raises-and-does-not-answer).
+- No values have been invented or approved beyond what is explicitly stated above (Rule 1, R12).
+
+**The Lead State Machine decision as a whole is not final.** Implementation approval requires the
+remaining AD-01 questions (Q2, Q3, Q5, Q6, Q8–Q16) and this amendment's open questions (N-1–N-4) to
+be resolved, followed by the project owner's explicit written approval of the complete model.

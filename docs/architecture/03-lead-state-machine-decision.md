@@ -1,6 +1,19 @@
 # Architecture Decision 01 — Lead State Machine
 
-**STATUS: PROPOSED — NOT APPROVED**
+**STATUS: PROPOSED — NOT APPROVED FOR IMPLEMENTATION**
+
+> **Product-Owner decision recorded, 2026-09-12.** The project owner has reviewed this document and
+> its amendment ([AD-01A](./03a-lead-state-machine-decision-amendment.md)) and issued explicit
+> decisions on **Q1** (reject a fifth "Pending" lifecycle state), **Q4** (Success = §20 Stage 3
+> Booked, after builder-side verification), **Q7** (approve the three-dimension Dump-reason
+> framework, no values yet), the **sync/verification axis** (split into two concepts, not one), and
+> the **assignment-state axis** (eliminated; zero persisted values). These decisions are recorded in
+> full in **[AD-01A §8](./03a-lead-state-machine-decision-amendment.md#8-product-owner-decision-2026-09-12)**
+> and govern over the corresponding sections below. **The refined design is now referred to as the
+> "Orthogonal Lead Model," not "Alternative C"** — see AD-01A §8.4 for the naming and its components.
+> Q2, Q3, Q5, Q6, Q8–Q16 below remain open. **This document is still NOT APPROVED FOR
+> IMPLEMENTATION** — no schema, SQL, migration or code may be built against it until every remaining
+> question is resolved and the project owner approves the complete model in writing.
 
 | | |
 |---|---|
@@ -1192,6 +1205,12 @@ Specifically: are *Today* and *Future* persisted states or Action Feed buckets, 
 real persisted state meaning "awaiting customer/third-party response"? If the six are decided as
 written, **Alternative A is what gets built** and most of §8 changes.
 
+> **DECIDED by Product Owner, 2026-09-12 (see [AD-01A §8](./03a-lead-state-machine-decision-amendment.md#8-product-owner-decision-2026-09-12)).**
+> §09's list was a discussion, not a decision. **Pending is rejected** as a fifth lifecycle state.
+> The lifecycle stays four values: **New / Follow-up / Success / Dump**. "Awaiting Response,"
+> "Blocked," *Today*, *Future*, and *Overdue* are operational/Action-Feed conditions, derived from
+> next-action timing — never persisted lifecycle state. No "Blocked" lifecycle state is created.
+
 **Q2 — Is there a maximum next-action horizon, and how are long-dated leads handled?**
 E-19: a follow-up 18 months out is invisible in every feed and indistinguishable from abandonment.
 Is there a cap, a parked treatment, or nothing?
@@ -1202,6 +1221,14 @@ E-17. Also: does an import trigger follow-up SLAs and escalations, and who is th
 **Q4 — (blocks the funnel) At exactly which booking milestone does a lead become Success?**
 §20's Booking Initiated, Pending Verification, or Booked (§6.4). Affects every conversion report,
 rep behaviour, and whether Success is reversible at all.
+
+> **DECIDED by Product Owner, 2026-09-12 (see [AD-01A §8](./03a-lead-state-machine-decision-amendment.md#8-product-owner-decision-2026-09-12)).**
+> **Success = §20 Stage 3, Booked, after the required builder-side verification milestone.** Booking
+> has its own, separate lifecycle/state machine; the Lead Lifecycle must **not** absorb Booking
+> states such as Initiated or Pending Verification. A subsequently cancelled booking must **not**
+> rewrite the historical Lead Lifecycle from Success back to Dump — the cancellation lives on the
+> booking, consistent with §35 and R6. Q6 (immediately below) narrows accordingly but is **not**
+> itself decided by this.
 
 **Q5 — Can a Dumped lead be re-engaged, or does re-contact create a new lead?**
 E-01. If re-engagement is allowed, who may authorize it, and how is the funnel restated?
@@ -1214,6 +1241,13 @@ the owner's call.
 **Q7 — (blocks terminal states) What is the Dump reason vocabulary?**
 The spec defines none (§1.3, §2.5). Until it exists, Dump conflates wrong numbers with genuine
 losses and no source-quality reporting is defensible. Also: is a reason **mandatory** on Dump?
+
+> **DECIDED by Product Owner, 2026-09-12 (see [AD-01A §8](./03a-lead-state-machine-decision-amendment.md#8-product-owner-decision-2026-09-12)).**
+> The **three-dimensional semantic framework** proposed in AD-01A is approved: (a) opportunity
+> validity class, (b) responsibility locus, (c) recoverability posture. **No reason values are
+> approved or finalized yet** — that remains open (see N-4). A terminal non-conversion disposition
+> **must** carry a reason, and the historical reason on a lead must be preserved, never silently
+> rewritten.
 
 **Q8 — Is §43's pending-enrichment queue in MVP scope?**
 §43 says the system "can maintain" it — permissive, not mandatory. §64's MVP list does not name
@@ -1257,7 +1291,18 @@ low-friction control has an incentive problem.
 
 ## 11. Architect Recommendation
 
-**Recommended: Alternative C — "Orthogonal Axes", with a four-value lifecycle.** Persist a small
+> **Superseded in part by Product-Owner decision, 2026-09-12 — see
+> [AD-01A §8](./03a-lead-state-machine-decision-amendment.md#8-product-owner-decision-2026-09-12).**
+> The paragraph below is the *original* recommendation as first proposed. It is retained verbatim as
+> the historical record. The **current, decided** shape is: lifecycle held at **four** values (no
+> *Awaiting Response* / "Pending" — Q1 decided against it); **Success = Booked, §20 Stage 3** (Q4
+> decided); the **sync/verification gate is split into two concepts**, not one axis (decided); the
+> **assignment-condition axis is eliminated** — zero persisted values, derived from Owner/Handler/
+> Assignment Log instead (decided); and the design is now named the **Orthogonal Lead Model**, not
+> "Alternative C." Q2, Q3, Q5, Q6, Q8–Q16 remain open and this document remains **NOT APPROVED FOR
+> IMPLEMENTATION**.
+
+**Recommended (original, historical): Alternative C — "Orthogonal Axes", with a four-value lifecycle.** Persist a small
 lifecycle vocabulary (**New · Follow-up · Success · Dump**, possibly plus *Awaiting Response*
 pending Q1); give the **sync/verification gate** (§12), **assignment condition** (§10, §42, §43,
 §57) and **attribution contest** (§11) each their own axis; and **derive** §09's *Today* / *Future*

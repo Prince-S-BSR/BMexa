@@ -116,6 +116,8 @@ The Beads managed block above defaults to "do not commit/push without being aske
 
 Prefer the Sonnet-tier agents for implementation tasks; escalate to `architect` only for decisions that are expensive to reverse.
 
+**Two independent layers govern agent behavior in this repo, and they answer different questions.** Layer 1 is this section — it determines WHICH model/agent performs work once that work is authorized. Layer 2 is `docs/BMEXA_MASTER_SPEC.md` §88 (the "Claude Autonomy Matrix") — it determines WHAT decisions may be made autonomously at all versus requiring the project owner's explicit approval first: canonical entities, relationships, booking lifecycle, financial rules, CP commission logic, tenant architecture, RLS, authorization, authentication, offline business behavior, source-of-truth rules, and audit requirements. Assigning work to `architect` (or to any subagent) does **not** itself satisfy Layer 2 — delegation is not authorization. No subagent may treat "I was asked to do this" as permission to decide one of the Layer-2 items on its own; those still require the project owner's explicit sign-off regardless of which model executes the eventual implementation.
+
 ## Skill Routing Protocol (Mandatory)
 
 **Before executing any feature work, the active subagent MUST evaluate the workspace skills below and invoke the best-fit skill first.** Do not write code or perform task execution without first consulting the relevant skill(s) for the category the task falls into. This is a hard gate, not a suggestion — skipping it is a process error even if the resulting code would have been correct.

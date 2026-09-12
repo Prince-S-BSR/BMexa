@@ -1124,3 +1124,33 @@ after first production write, but **the partition-creation half must be running 
 2027-09**, and a pre-created runway is exactly the kind of cushion that gets silently consumed
 because nothing complains until it is empty. Monitor partition coverage as a metric, not the
 job's exit code.
+
+---
+
+## 14. Phase 0 status (2026-09-12): reopened for BMexa security gate
+
+**This is a revision record, not a rewrite of §12.** The verification table in
+[§12](#12-verification-status-of-the-companion-schema) is preserved exactly as it was executed
+and remains a true historical record: Phase 0's original acceptance test — the R1/R2/R3 suite
+plus the session-context tests, 27 tests in total — **passed**, against a real PostgreSQL 16
+instance, with two really-provisioned tenants. That fact is not erased or qualified away by
+this section.
+
+However, [`docs/BMEXA_MASTER_SPEC.md`](../BMEXA_MASTER_SPEC.md) §77's Phase 0 Gate imposes an
+additional, stricter criterion that the original 27-test suite did not specifically exercise:
+
+> "(3) Server-side authorization cannot be bypassed through manipulated request payloads."
+
+The original suite proves tenant isolation holds under *normal* request shapes — correct
+tokens, correct tenant context, no adversary in the loop. It does not include tests that
+actively attempt to defeat that isolation with a manipulated payload: a spoofed `tenant_id` in
+the body, query string, or path; a cross-tenant record ID substituted into an otherwise valid
+request; an altered ownership/user ID field; or a scope-widening attempt against either a read
+or a mutation. This is a real gap between "passed the test it was given" and "passed the gate
+BMexa now requires," not a defect discovered in the passing suite itself.
+
+**Per explicit project-owner decision, Phase 0 is therefore REOPENED — BMEXA SECURITY GATE
+PENDING.** Phase 0 is not, and must not be described as, BMexa-complete at this time. It closes
+again only once adversarial tenant-boundary tests covering BMexa §77 criterion 3 — tracked
+separately as Beads issue `Final-Verison-j75` — are written and passing, alongside the
+existing 27 tests, unweakened.

@@ -1,5 +1,12 @@
 # Product & Engineering Roadmap
 
+> **SUPERSEDED — 2026-09-12.** Per explicit project-owner decision, this roadmap is superseded
+> by [`docs/BMEXA_MASTER_SPEC.md`](./BMEXA_MASTER_SPEC.md) §§77–86, which is now the source of
+> truth for all future phase planning. This file is **retained as historical/reference
+> material** — it documented the roadmap before the BMexa specification arrived, and the phase
+> content below is kept as a historical record, not deleted or rewritten. Do not plan new work
+> against the phase sequence below; plan against the BMexa Master Spec instead.
+
 **Status:** Living document. Phase 0 is complete; everything after it is plan, not promise.
 **Companion documents:** [`ENGINEERING_RULES.md`](./ENGINEERING_RULES.md) ·
 [`architecture/00-phase-0-architecture-note.md`](./architecture/00-phase-0-architecture-note.md) ·

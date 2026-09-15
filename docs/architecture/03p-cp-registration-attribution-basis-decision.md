@@ -1137,3 +1137,593 @@ forward unchanged.
 > `AC-18`, `AC-21`, `Q10`/`M-5`), RAISES the priority of four (`AC-14`, `AC-15`, `AC-20`, `Q11`), and ADDS
 > FIVE (`AC-22 … AC-26`). **It reduces the number of possible ARCHITECTURES from one-and-a-half to one. It
 > reduces the number of blocking QUESTIONS by roughly one, and it changes which ones block.**
+
+---
+
+## 4. The amendment register
+
+> ⟦ARCHITECT ANALYSIS⟧ **Determinations 16 and 17 are made in this section; determination 18 is made in
+> [§5](#5-remaining-product-owner-questions-and-ratifications). **NO FILE IS EDITED BY THIS DOCUMENT.**
+> Where an amendment is logically required it is **NAMED PRECISELY AND NOT MADE**, and the prior document is
+> left exactly as it stands — the discipline every document in this series has kept, and the reason
+> `A-1 … A-26` are still on the register.**
+>
+> **Every item below is a conflict with an unapproved ⟦ARCHITECT RECOMMENDATION⟧, never with an approved
+> Product-Owner decision.** **Result of the search against approved decisions: NO contradiction was found
+> with `Q1`, `Q4`, `Q6`, `Q7`, `V-1`, `V-2`, `V-3`, `V-7`, `V-11`, `V-12`, `J-2` or `K-18`. None of them is
+> reopened, and `K-18` is CONFIRMED for a third consecutive document.**
+
+### 4.1 The nine amendments, named and NOT made
+
+> ⟦ARCHITECT ANALYSIS⟧ **`PF-28` — the register's arithmetic, stated before the register, because two of its
+> entries are shaped unusually and one of its numbers is introduced here rather than in [§3](#3-the-reconciled-architecture).**
+>
+> **Three facts about the numbering, each checked rather than asserted:**
+>
+> 1. **Eight of the nine numbers reserved at the head of this document — `A-27`, `A-28`, `A-29`, `A-30`,
+>    `A-31`, `A-32`, `A-33`, `A-35` — are already cited inline in [§2](#2-the-existing-architecture-baseline-this-decision-lands-on)
+>    and [§3](#3-the-reconciled-architecture). `A-34` is NOT.** It is introduced here, and it is **not a
+>    filler**: [§3.16](#316-which-of-ad-01ms-five-policies-this-decision-selects) identified an amendment to
+>    AD-01N's `NF-30` that goes **beyond** AD-01O's `A-25` — the Policy-E layer count moves from one to two —
+>    and left it unnumbered. **A register cannot leave it unnumbered. The ninth amendment is therefore real,
+>    the count is NINE and not eight, and the reason it is nine is recorded rather than assumed.**
+> 2. **Two entries — `A-28` and `A-31` — are TWO-LIMBED, because a single owner clause lands on two different
+>    prior documents.** `PO-P12`'s traceability clause amends **AD-01O's `O-U`** and **AD-01N's `NF-27`**;
+>    the substitution of a registration for a predecessor Inquiry as the ground amends **AD-01L's `B-2`** and
+>    **AD-01J's `C-I`/`C-III`**. **Each limb is separately ratifiable and each is stated separately below.
+>    No number is split, re-assigned or renumbered, because the inline citations in §2 and §3 are
+>    load-bearing and this document does not edit itself.**
+> 3. **The reserved contradiction range `X-18 … X-24` is NOT exhausted, and no contradiction is invented to
+>    fill it.** **Five contradictions were found — `X-18 … X-22` — and `X-23` and `X-24` are NOT ALLOCATED.**
+>    ⟦ARCHITECT ANALYSIS⟧ **The reservation was a ceiling, not a quota. Nothing in §4 or §5's synthesis
+>    surfaced a sixth, and inventing one would be the same defect as inventing a business rule.**
+
+| # | Document and target | Amendment — **NAMED AND NOT MADE** |
+|---|---|---|
+| **`A-27`** | **AD-01O — `C-XIII`**, and its eleven-event prohibition list | **THREE limbs.** **(i)** ⟦PRODUCT-OWNER DECISION⟧ **`C-XIII`'s central claim — *only an explicit registration act creates a registration; expiry never does* — must be RE-LABELLED from ⟦ARCHITECT RECOMMENDATION — NOT APPROVED⟧ to ⟦PRODUCT-OWNER DECISION⟧**, because `PO-P7`(a) states it in the owner's own words. **This is exactly what `A-20` did for `C-XI`, and it is the same class of upgrade: the architect's guard-rail becomes the owner's rule** (`PF-16`). **(ii)** **The prohibition list must be EXTENDED BY ONE ROW: *the minting of a claim creates no registration, and a minted claim is never evidence that a registration relationship exists.*** Under `P-G` a minted claim carries four of the registration's five identifying facts, and reconstructing a registration from one would create a money-bearing commercial record with **no registration act, no actor and no authorization context** — which ⟦SOURCE⟧ **§54** and **R6** cannot represent (`PF-17`). **This is an extension by ADDITION; `C-XIII`'s principle is unamended.** **(iii)** **`C-XIII`'s ACTOR must be stated in PERMISSION terms, never in role terms:** *an explicit registration act performed by an actor holding the registration permission, scope-bound to the Project* — ⟦SOURCE⟧ **R2**, `NF-26(9)`. **Whether the owner intends that permission to be confined to the default `Helpdesk` role is NOT decided here** → [§5.1](#51-the-ratifications-this-document-itself-requires). **AD-01O is NOT edited.** |
+| **`A-28`** | **(a) AD-01O — `O-U`**; **(b) AD-01N — `NF-27`** | **TWO limbs, one requirement.** **(a)** **`O-U` must be extended from a CARDINALITY rule to a CARDINALITY-PLUS-TRACEABILITY rule.** `O-U` says at most one protection-bearing registration per triple at any instant and that the triple carries an ordered non-overlapping sequence. ⟦PRODUCT-OWNER DECISION⟧ **`PO-P12` adds a clause `O-U` did not have: *"an inquiry's attribution must be TRACEABLE to the specific registration record that grounded it."*** **That is `A-21`'s requirement stated as a business rule, and it is not derivable from cardinality** (`PF-7`). **(b)** **AD-01N's `NF-27` five-event audit list must acquire a SIXTH EVENT — *a claim was minted on a registration ground* —** retaining the Inquiry, the **specific registration record cited**, that registration's `R` and `N` **as they stood**, the gate-evaluation date `G`, the boundary convention and timezone applied, the minting actor and authorization context, and **that the origin was SYSTEM rather than human where it was** (§3.12 link 2; ⟦SOURCE⟧ **§54**'s *system/human origin* clause, doing material work for the first time in the series). **And `NF-27`'s eligibility-determination event must additionally retain BOTH registration records, and the fact that they DIFFER, wherever the registration consulted for conjunct (iii) is not the registration the claim cited** (§3.12 link 4; `PF-5` configuration 2). **AD-01N and AD-01O are NOT edited.** |
+| **`A-29`** | **AD-01N — §L.3's `AC-4`, and §F.1 / `NF-28`'s conjunct (iii)**; by entailment **AD-01O §5.3** | **TWO limbs.** **(a)** **`AC-4` is CLOSED** (`PF-3`, `X-18`). AD-01N §L.3 records `AC-4` as *"the highest-value item for the owner in this document"* and AD-01O §5.3 restates it as *"the one question that decides the architecture."* **Both statements must be marked ANSWERED: Reading F is not selected; Reading H is; and with `AC-4` closes AD-01M's `Q1`.** **(b)** **`NF-28`'s conjunct (iii) is written as though the triple carries ONE registration.** Under `O-U`'s sequence plus `P-G`'s second consumer at a second date, it must state **WHICH** registration governs when the record containing `G` and the record containing `B` are different registrations of the same CP over the same triple (`PF-5` configuration 2, `X-22`). ⟦ARCHITECT ANALYSIS⟧ **NO ANSWER IS SUPPLIED AND NO DEFAULT IS IMPLIED — `AC-22` owns it, and the amendment's content follows the owner's answer rather than the architect's.** **AD-01N and AD-01O are NOT edited.** |
+| **`A-30`** | **AD-01L — `C-VIII`**, and therefore **`A-12`** and **`A-21`** | **`C-VIII`'s *"and from nothing else"* is CONTRADICTED a second time and in a NEW WAY** (`X-19`). `A-12` admitted the predecessor's **origination end** as a measurement base; `A-21` narrowed that to **a specific registration record's own fixed date.** **`P-G` requires one step further, and it is a step of KIND rather than of degree: under `PO-P1` the horizon is not a measured interval at all — it is the cited registration's OWN VALIDITY WINDOW, `(R, N)`, as snapshotted at creation** ([§3.15](#315-determination-15--how-much-of-b-2-and-of-p-α--p-δ-this-closes), `P-γ`). **`C-VIII` must be amended to admit a WINDOW-BOUNDED ground alongside its interval-measured ones.** ⟦ARCHITECT ANALYSIS⟧ **`C-VIII`'s four GROUNDS are unchanged and all four are satisfied — the window is commercial-object-owned, immutable, determinate at the gate, and not extendable by a work act (`PO-N3`, `PO-N4`, `PO-P6`).** ⟦SETTLED⟧ **AD-01E `U-4` is NOT weakened: no dormancy threshold is invented and the number is the Project's configured lock-in, which is the builder's.** **AD-01L is NOT edited. `A-12` and `A-21` remain named and not made.** |
+| **`A-31`** | **(a) AD-01L — `B-2`'s stated GROUND**; **(b) AD-01J — `C-I` and `C-III`** (from `J-31`) | **TWO limbs, one substitution.** **(a)** **`B-2` as AD-01L stated it FIXES the ground:** *"carrying as its stated ground **a citation of a determinate earlier Inquiry**."* **`PO-P1`'s ground is a determinate `CP Project Registration` RECORD.** `B-2` must be amended to state its ground as a **PARAMETER with at least two admissible values** — the registration ground (**GRANTED**) and the closed-predecessor-Inquiry ground (**STILL OPEN**) — **so that the granted branch is never read as having answered the ungranted one** (`X-20`, `PF-25`). **(b)** **`C-I`** (classification-sensitivity — *which closure classes admit citation*) **does not engage on this pathway at all**, because `P-G` never reads a closure; **`C-III`** (a determinate predecessor) **is satisfied by a record that is not a predecessor Inquiry.** Both must be amended to say **determinate GROUND**, not **determinate predecessor INQUIRY**. ⟦ARCHITECT ANALYSIS⟧ **This is an amendment by GENERALISATION, not by weakening: neither constraint loses any force on the closure-grounded branch, which remains open, and `C-II` and `C-IV` require no amendment at all.** **AD-01J and AD-01L are NOT edited.** |
+| **`A-32`** | **AD-01L — `L-6`** (and with it `K-22`) | **`L-6` must state its own SCOPE, and it currently does not.** `L-6` is written about a **CLOSED INQUIRY** used as a ground. Under `P-G` the ground is a **registration**, and `L-6`'s reach is ambiguous between **(L-6·ground)** and **(L-6·engagement)** (`PF-26`, `X-21`). ⟦ARCHITECT ANALYSIS⟧ **The amendment is forced by `L-6`'s own wording rather than by preference:** `L-6` claims *"this is not a policy the owner may or may not adopt; it is a fact the model cannot record coherently"* — **and a claim of necessity requires a determinate scope, because a rule that cannot say what it ranges over cannot be necessary about anything.** **This document SELECTS NEITHER READING and proposes NO TEXT for the amendment. `AC-14` ([§5.3](#53-ac-14-restated--the-question-this-decision-makes-acute)) owns the choice, and the amendment's content follows from the owner's answer.** **`L-6` and `K-22` are NOT reopened, NOT narrowed and NOT ratified. AD-01L is NOT edited.** |
+| **`A-33`** | **AD-01J — `AA-4`** | **`AA-4` — *must a new Inquiry reference a specific prior Inquiry?* — must be amended to record that it is NARROWED, NOT RESOLVED.** Its **Inquiry → Inquiry succession** form is **not required by `P-G` at all** (`PF-6` candidate (d)): the ground is a record that already has its own identity, so **no Inquiry succeeds any other Inquiry under `P-G`**, and `K-21`(a)'s first priced cost is **not incurred on this pathway.** **`AA-4` survives only for `B-2`'s closure-grounded branch, which remains open** (`PF-25`). ⟦ARCHITECT ANALYSIS⟧ **Narrowing a question's scope is not answering it: `AA-4` is NOT answered, and no reference of any kind is proposed, designed or implied.** **AD-01J is NOT edited.** |
+| **`A-34`** | **AD-01N — `NF-30`**, beyond AD-01O's **`A-25`** — **INTRODUCED HERE** | **`NF-30` mapped the lock-in rule onto AD-01M's five policies CONDITIONALLY on `AC-4`, and with ONE bounded Policy-E layer.** AD-01O's **`A-25`** already named an amendment collapsing the conditionality to *"Policy C + bounded E."* **`PO-P4` requires a FURTHER amendment that `A-25` could not have contained, and it has two parts.** **(i)** **There are TWO bounded Policy-E layers, not one:** (1) `PO-N8`/`PO-N9`'s **one-directional exception path** at eligibility (ineligible → eligible-as-exception, scoped per booking), and (2) `PO-P4`'s routing of **EVERY minted claim** to §11 adjudication by builder-side authorized leadership — **which is Policy E applied *within* Policy C's condition rather than instead of it** ([§3.16](#316-which-of-ad-01ms-five-policies-this-decision-selects)). **(ii)** **The mapping is no longer conditional at all, because `AC-4` is closed** (`A-29`(a)). ⟦ARCHITECT ANALYSIS⟧ **§3.16 identified this change — *"and this is a change from `NF-30`"* — and left it unnumbered; the register cannot, so it is numbered here.** **`A-25` is confirmed in substance and remains named and NOT made; `A-34` EXTENDS it and does not replace it.** ⟦SETTLED⟧ **AD-01M itself requires NO amendment: its five policies are unchanged and Policy C is one of them exactly as written.** **AD-01N is NOT edited.** |
+| **`A-35`** | **AD-01N — §J.3(3)**, the CP conversion-reporting failure modes | **AD-01N §J.3(3) enumerates TWO distinguishable negative outcomes for CP conversion reporting. Under `P-G` there are THREE:** *converted and not attributed* · *converted but time-barred* · **NEW — *converted, GROUNDED, and LOST at §11.*** **The three are commercially different and must never be one number.** ⟦SOURCE⟧ **R4**: reports branch on semantics, never on tenant-renameable labels. ⟦SETTLED⟧ **`J-48`'s single denominator is untouched — a minted claim adds a CLAIM, never an INQUIRY.** ⟦SETTLED⟧ **No CP scorecard, producer-evaluation product or ranking of any kind is authorised by anything above** (AD-01A §3.3, upheld). **AD-01N is NOT edited.** |
+
+### 4.2 Documents requiring NO change — each checked
+
+> ⟦ARCHITECT ANALYSIS⟧ **Stated document by document so that *"no change required"* is a CHECKED RESULT
+> rather than an omission. Two results are notable in advance and are stated as results:
+> **AD-01K requires NO amendment**, which is the third consecutive document in which the attribution-anchor
+> document survives a CP decision untouched; and **AD-01M requires NO amendment**, because the owner has
+> selected one of its five policies as written rather than a sixth shape it did not present.**
+
+| Document | Result |
+|---|---|
+| **AD-01** | **No change.** §D.4 (*"claims are never overwritten by a later claim"*) is **load-bearing twice** here — once for `K-17`'s append-only claim set, once for the appended §11 resolution of a minted claim (§3.12 link 3). `E-13`'s shape (commission keys on the resolved claim, never on a lifecycle state) CONFIRMED. **`Q10` and `Q11` are NOT resolved** — `Q11`'s consumer becomes **BLOCKING** (`PF-22`, `AC-23`) and `Q10` newly gates a second mechanism (`§3.17`). |
+| **AD-01A** | **No change.** `Q1`, `Q4`, `Q7` fixed input, **NOT reopened.** **§8.5 honoured — no workflow, screen, approval step or gate is designed anywhere above, including around the mint and the adjudication.** **§3.3's prohibition on a producer-evaluation product is UPHELD and is cited against `A-35`.** **`N-4` NOT resolved and still OFF this pathway's critical path** — unless `AC-14` is answered in the (L-6·engagement) direction. **No Dump-reason value is proposed.** |
+| **AD-01B** | **No change.** §4's *"unrecoverable if decided by implementation"* standard is applied to `C-XVI`, `AC-14`, `AC-22`, `AC-24`, `AC-25` and `AC-26` — **which is why [§6](#6-recommendation) does not recommend `BUILD NOW`.** |
+| **AD-01C** | **No change.** **`Q6` NOT reopened, NOT narrowed, still actively protected by `C-XII`.** `T-1`, `T-3`, `T-6 … T-11` NOT resolved. **`T-9` retains both financial dimensions AD-01N and AD-01O gave it and acquires a CLAIM-EXISTENCE-bearing one** (`AC-9`, `AC-24`). **`K-26` and `T-5` are preserved EXACTLY** — `P-G` grounds on a registration and does not run through `K-26`'s subject at all (`§3.14`). `D6`'s governance argument — *"a policy silently created by the data model"* — is relied upon against AD-01K Candidate A and is **not weakened.** |
+| **AD-01E** | **No change.** **`U-4` is NOT weakened by `A-30`:** the bound is the registration's own window, which is anchored at registration and not at the onset of inactivity, **so no dormancy threshold is invented and none is implied.** `X-3`'s stale-inventory warning carries forward. |
+| **AD-01F** | **No change.** §12.4's prohibition on a re-engagement restating a closed period CONFIRMED. **`V-4` remains OPEN, is NOT resolved, NOT narrowed, and is still the cheapest unblocking question in the register — now recommended by SEVEN consecutive documents and not taken.** It does not block this decision and this decision does not block it. |
+| **AD-01G** | **No change — and `G-8`'s read-time-projection principle is load-bearing THREE times** (*"revisit"*, *"expired"*, and now the Inquiry's derived reference to the registration that grounded its attribution — `PF-23`). `G-1`/`V-1` CONFIRMED and corroborated a second time by `PO-P10` level 1's *"long-lived."* **`G-9` untouched — the Assignment Log is NOT the carrier for anything in `P-G`.** `G-4`'s Sales Episode rejection re-tested against a grounding pathway and **STANDS.** **`V-7` NOT reopened** — its fail-closed projection is again the mechanism for `AC-13`'s twice-enlarged visibility question, and only the content is open. |
+| **AD-01H** | **No change.** `V-2`, `V-3`, `H-4`, `H-8`, `H-9` CONFIRMED. **`H-4`'s terminal-once property remains what forces the registration record.** **`Y-1`, `Y-3`, `Y-4`, `Y-5` NOT resolved — `Y-1` and `Y-3` are newly COUPLED to `AC-26`** (`PF-8`), **and naming a coupling is not resolving it.** |
+| **AD-01I** | **No change — and `I-4 … I-9` are CONFIRMED and re-tested.** **`I-9`'s *"no new canonical business object is necessary"* is the standard [§3.2](#32-determination-2--a-new-mechanism-or-an-existing-one) had to meet and DID meet, for the EIGHTH consecutive document** — five candidate artefacts were tested and all five FAILED. `I-6`/`I-7` structural via `C-XIII`; `NF-21`'s *"a Dump is not an expiry and an expiry is not a Dump"* CONFIRMED. `Z-2`, `Z-5` NOT resolved. |
+| **AD-01J** | **Two amendments — `A-31`(b) and `A-33`.** **`J-2` itself requires NO amendment, is NOT narrowed, and is NOT given a new input** (`PF-6`): `P-G` step 1 is `J-2` as bounded by `K-50`, unchanged. `J-34`, `J-36`, `J-37`, `J-42`, `J-43`, `J-46`, `J-48` CONFIRMED. **`C-II` and `C-IV` adopted UNCHANGED and both load-bearing — `C-II` is what makes `PF-12`'s second answer FORCED rather than chosen.** **`AA-2` is on a SECOND critical path and its urgency rises again** (`§3.17`). **`AA-1`, `AA-5` NOT resolved.** |
+| **AD-01K** | **NO CHANGE — and this is a result, not an omission.** **`K-18` CONFIRMED for a third consecutive document; `K-17`, `K-48` (as extended by `NF-28`), `K-9`, `K-10`, `K-12`, `K-26`, `K-38`, `K-40`, `K-42`, `K-47`, `K-50`, `K-52`, `K-54` all CONFIRMED and none contradicted.** **`C-V`, `C-VI` (in `A-11`'s refined reading) and `C-VII` are adopted unchanged and become OPERATIVE rather than hypothetical for the first time.** **Candidate A REMAINS ELIMINATED.** ⟦ARCHITECT ANALYSIS⟧ **A decision that grants a new commercial licence and amends AD-01K NOWHERE is the strongest single piece of evidence that `K-18` was the right anchor.** `AB-1`, `AB-2`, `AB-3` NOT resolved; **`AB-3` gains a new inbound route and is not thereby narrowed.** |
+| **AD-01L** | **Three amendments — `A-30`, `A-31`(a), `A-32`.** **`B-1` CONFIRMED and NOT ENGAGED — a stronger result than *not violated*, because a registration was never recorded on any Inquiry at all (`NF-9`, re-tested a third time).** **`C-IX` ADOPTED and SATISFIED WITHOUT AMENDMENT by `PO-P4` — the largest governance gain in this document.** **`C-X` ADOPTED and satisfied more strongly than by a closure.** `L-10`, `L-13`, `L-25`, `L-19`, `L-21`, `L-24` all relied upon and none amended. **`A-1 … A-11` remain named and not made.** |
+| **AD-01M** | **NO CHANGE.** **Policies A, B and D REMAIN ELIMINATED; Policy C is SELECTED AS WRITTEN, with its most-criticised dependency (`N-4`) removed by the owner's own choice of condition.** `§15.1` remains falsified in half (`X-2`/`A-13`), unchanged. **`AC-1`, `AC-2`, `AC-3` carry forward** — `AC-2` gains a first-class case and `AC-3` becomes money-bearing at the claim layer, **and gaining a case is not being resolved.** **`Q0-a … Q0-c`, `Q0-e` NOT answered; `Q0-d` is OFF this decision's critical path but remains formally open** (`PF-21`). **`MF-3`'s test for Policy D is applied and upheld.** |
+| **AD-01N** | **Four amendments — `A-28`(b), `A-29`, `A-34`, `A-35`.** **`NF-6`, `NF-9`, `NF-15`, `NF-19`, `NF-21`, `NF-24`, `NF-26(9)`, `NF-28`, `NF-29` all CONFIRMED.** **AD-01N remains at `VALIDATE` and is NOT approved.** ⟦ARCHITECT ANALYSIS⟧ **The concentration is again informative: AD-01N takes four of the nine, which is what a document at `VALIDATE` receiving its SECOND round of owner input should take. It is evidence the gate is working, not that AD-01N was wrong to be written.** |
+| **AD-01O** | **Two amendments — `A-27`, `A-28`(a).** **`O-U` ADOPTED and CORROBORATED in the owner's own words (`PO-P12`); `OF-4`, `OF-5`, `OF-6`, `OF-10`, `OF-12`, `OF-14`, `OF-15`, `OF-17` all CONFIRMED; `C-XIV` NOT BREACHED and given a second independent justification (`PF-15`).** **AD-01O remains advisory and is NOT approved.** |
+| **`01-bmexa-architecture-reconciliation.md`** | **No change. `M-5`'s uniqueness half and `M-9` are NOT resolved, NOT narrowed and NOT branched.** **`M-5` is named as GATING a SECOND mechanism** — a lookup that finds the wrong Client record will fail a grounding test that should have passed, or pass one that should have failed (`§3.17`) — **and naming a dependency is not resolving it.** **`A-8` carries forward unchanged. `M-9` still owns every formula, rate, slab, amount, milestone value, clawback quantum, passback rule and TDS treatment, and nothing above touches any of them.** |
+| **`BMEXA_MASTER_SPEC.md` / consolidated requirements** | **No change, and NO amendment is proposed to either.** ⟦ARCHITECT ANALYSIS⟧ **§11 requires NO amendment whatsoever — *"record each attribution claim, preserve history … builder-side authorized leadership resolves attribution"* is satisfied LITERALLY by `P-G` step 5 (`PF-21`).** **§54's *system/human origin* clause does material work for the first time in the series** (`A-28`(b)). **§39, §12, §44, §45, §88, §97, R1, R2, R4, R6, R12 are read as they stand and none is extended, narrowed or reinterpreted.** |
+
+### 4.3 Reconciliation completeness — determination 16
+
+> ⟦ARCHITECT ANALYSIS⟧ **`PF-29` — the task requires explicit amendment identification against EVERY prior
+> document this decision touches. The six named documents are checked one by one, and a NIL result is
+> recorded as a nil result rather than passed over in silence.**
+
+| Prior document | Amendments required | Named at | Verdict |
+|---|---|---|---|
+| **AD-01J** | **2** | `A-31`(b) — `C-I`/`C-III` generalised from *determinate predecessor Inquiry* to *determinate ground*; `A-33` — `AA-4` narrowed to the closure-grounded branch | **AMENDED, NOT EDITED.** `J-2`, `C-II`, `C-IV` untouched |
+| **AD-01K** | **0** | — | **NIL — CHECKED AND CONFIRMED.** `K-18`, `K-17`, `K-48`, `C-V`, `C-VI`, `C-VII` all survive the grant unamended |
+| **AD-01L** | **3** | `A-30` — `C-VIII` admits a window-bounded ground; `A-31`(a) — `B-2`'s ground becomes a parameter; `A-32` — `L-6` must state its scope | **AMENDED, NOT EDITED.** `B-1`, `C-IX`, `C-X` untouched |
+| **AD-01M** | **0** | — | **NIL — CHECKED AND CONFIRMED.** Policy C is selected as AD-01M wrote it; `§15.1`'s prior falsification (`A-13`) is unchanged and is not re-stated here |
+| **AD-01N** | **4** | `A-28`(b) — `NF-27` gains an event and an extra retention; `A-29` — `AC-4` closed and conjunct (iii) under-specified against a sequence; `A-34` — `NF-30`'s Policy-E layer count; `A-35` — §J.3(3)'s third negative outcome | **AMENDED, NOT EDITED. STILL AT `VALIDATE`. STILL NOT APPROVED** |
+| **AD-01O** | **2** | `A-27` — `C-XIII` re-labelled, extended by one row, and stated in permission terms; `A-28`(a) — `O-U` extended to cardinality-plus-traceability | **AMENDED, NOT EDITED. STILL ADVISORY. STILL NOT APPROVED** |
+
+> ⟦ARCHITECT ANALYSIS⟧ **Two completeness properties are asserted and both are checkable against the table
+> above.**
+>
+> 1. **Every amendment this document's Sections 1–3 cite inline has a row in [§4.1](#41-the-nine-amendments-named-and-not-made),
+>    and every row in §4.1 is cited inline or is `A-34`, whose absence from §3 is itself recorded
+>    (`PF-28(1)`).** **There is no amendment named in the body and dropped from the register, and none in the
+>    register that the body does not require.**
+> 2. **Every prior document named in this document's predecessor list has an explicit verdict — an amendment,
+>    or a checked NIL — in [§4.2](#42-documents-requiring-no-change--each-checked) or the table above.**
+>    **AD-01, AD-01A, AD-01B, AD-01C, AD-01E, AD-01F, AD-01G, AD-01H and AD-01I each carry a checked NIL;
+>    AD-01J, AD-01L, AD-01N and AD-01O carry amendments; AD-01K and AD-01M carry a checked NIL against a
+>    decision that touches both of them substantively, which is the stronger form of the result.**
+
+### 4.4 No prior document was silently edited — determination 17, stated as a checked fact
+
+> ⟦ARCHITECT ANALYSIS⟧ **The task requires this to be VERIFIED, not asserted. It is verified against the
+> repository's own history rather than against the architect's intention, because an intention is not
+> evidence.**
+>
+> | Check | Result |
+> |---|---|
+> | Working tree state | **`git status --porcelain` names NO FILE OTHER THAN THIS DOCUMENT.** No prior document, spec or requirements file in the repository carries an uncommitted modification of any kind, at any point during this document's production |
+> | The commit that introduced this document | **Exactly ONE file changed: `docs/architecture/03p-cp-registration-attribution-basis-decision.md`.** **1139 insertions, 0 deletions.** **A commit with ZERO deletions cannot have altered an existing line of any file** |
+> | Scope of that commit within `docs/architecture/` | **One path. `git show --stat … -- docs/architecture/` returns the same single file** |
+> | Consequence for the chain | **`00-*.md` through `03o-*.md`, `schema-phase-0.sql`, `BMEXA_MASTER_SPEC.md` and the consolidated requirements are BYTE-IDENTICAL to their state before this document existed** |
+>
+> **Therefore: AD-01, AD-01A, AD-01B, AD-01C, AD-01E, AD-01F, AD-01G, AD-01H, AD-01I, AD-01J, AD-01K,
+> AD-01L, AD-01M, AD-01N and AD-01O are ALL UNEDITED.** **The thirty-five amendments on the register are
+> NAMED AND NOT MADE, and only the Project Owner may make any of them.**
+
+### 4.5 The register after this document
+
+> ⟦ARCHITECT ANALYSIS⟧ **`PF-30` — stated because the number is itself a finding, as it was for AD-01N and
+> again for AD-01O.**
+>
+> **AD-01N closed with *"Thirteen unmade amendments across seven documents."* AD-01O added thirteen more and
+> closed at `A-1 … A-26` across EIGHT documents, observing that *"the documents cannot all be approved as
+> literally written."*** **This document adds NINE — `A-27 … A-35` — across ELEVEN limbs and FOUR target
+> documents.**
+>
+> | Target | Amendments (limbs) | Count |
+> |---|---|---|
+> | **AD-01N** | `A-28`(b), `A-29`, `A-34`, `A-35` | **4** |
+> | **AD-01L** | `A-30`, `A-31`(a), `A-32` | **3** |
+> | **AD-01J** | `A-31`(b), `A-33` | **2** |
+> | **AD-01O** | `A-27`, `A-28`(a) | **2** |
+> | **AD-01K, AD-01M, and every other prior document** | — | **0** |
+>
+> **The register now stands at `A-1 … A-35`, across NINE documents. NONE has been made.** **`Q0-e` — AD-01M's
+> ratification asking the owner to ratify `A-1 … A-n` — is correspondingly larger and is NOT answered here.**
+>
+> ⟦ARCHITECT ANALYSIS⟧ **Two observations about the shape of the growth, neither of which softens the
+> number.** **First, this document is the first in the series to amend AD-01O, which is what a chain does
+> when a decision arrives that AD-01O anticipated but could not answer — `A-27` and `A-28`(a) are both
+> UPGRADES (an architect's recommendation becoming the owner's rule, and a cardinality rule acquiring the
+> traceability clause its own author asked for), not corrections.** **Second, nine amendments for a decision
+> that closes `AC-4`, answers `Q1`, settles three of AD-01K's four parameters and de-gates `Q0-d` is a
+> FAVOURABLE exchange rate — but it is an exchange rate the owner has to accept explicitly, and
+> thirty-five unmade amendments across nine documents is not a state any of those documents can be approved
+> in.**
+
+---
+
+## 5. Remaining Product-Owner questions and ratifications
+
+> ⟦BUSINESS DECISION REQUIRED⟧ **Determination 18: is further clarification GENUINELY still required after a
+> decision this substantial? **YES**, and the list below is shorter than AD-01O's in one respect and sharper
+> in another — it names FEWER architectures and MORE money-bearing parameters.** Per Spec **Rule 1**,
+> **§88**, **§97** and consolidated **§1** and **§30**, **none of it is guessed and nothing below is filled
+> in from inference.**
+>
+> ⟦ARCHITECT ANALYSIS⟧ **Discipline for this section, stated once and honoured throughout. NOTHING settled in
+> [§3](#3-the-reconciled-architecture) is re-argued here.** `AC-4` is closed and is not re-opened;
+> `P-β`, `P-γ` and `P-δ` are answered and are not re-posed; Policy C is selected and the other four are not
+> re-weighed; and **every item in `§3.17`'s accounting table keeps exactly the status that table gave it.**
+> [§5.2](#52-the-five-new-questions-and-the-rest-carried-forward) is an **INDEX** onto that table, not a
+> second adjudication of it.
+
+### 5.1 The ratifications this document itself requires
+
+> ⟦ARCHITECT ANALYSIS⟧ **`PF-31` — one constraint this document has relied on FOUR times has never actually
+> been stated, and it is stated here, in the section that [§3.0](#30-the-headline-finding-ac-4-is-answered)
+> promised would ask for its ratification.**
+>
+> **`C-XVI` is cited at the head of this document's numbering discipline, at `PF-4`, at `P-G` step 5 and at
+> [§3.14](#314-determination-14--ad-01ks-separation-of-attribution-anchor-from-eligibility-anchor) — always
+> as the thing that closes the gap `C-XI`'s wording does not reach, and nowhere as a stated rule.** **A
+> constraint that is only ever referred to cannot be ratified, and an unratifiable constraint is not a
+> control. It is stated now.**
+
+> ⟦ARCHITECT RECOMMENDATION — `C-XVI`, a constraint⟧ *(RECOMMENDED, SUBJECT TO THE PROJECT OWNER'S EXPLICIT
+> WRITTEN APPROVAL. **NOT APPROVED. NOT APPROVED FOR IMPLEMENTATION.** ⟦SOURCE⟧ **§88** MUST-ASK:
+> authorization rules, CP commission logic, source-of-truth rules. **This is stated as a BUSINESS RULE. No
+> schema, table, column, index, query, type, screen or workflow is proposed, implied or derivable from it.**)*
+>
+> **`C-XVI` — A claim minted on a registration ground is an ORDINARY attribution claim in EVERY respect that
+> bears on its resolution. It may be given NO default win, NO presumption, NO tiebreak, NO privileged or
+> abbreviated resolution path, NO differential weight, and NO outcome that follows from the mere fact that
+> its ground is a registration.**
+>
+> **Three corollaries, each stated because each is a separate implementation temptation:**
+>
+> 1. **An UNOPPOSED minted claim is not thereby a RESOLVED claim.** `K-48` conjunct (i) requires *"the
+>    RESOLVED attribution claim"* and ⟦SOURCE⟧ **§11** reserves resolution to builder-side authorized
+>    leadership. **Whether an unopposed claim requires the same adjudication act as a contested one is
+>    `AC-25` and is NOT decided by `C-XVI`** — what `C-XVI` forbids is resolving it *because* it is
+>    registration-grounded.
+> 2. **A minted claim may LOSE, and losing must be a reachable, recorded, permanent outcome** — `PO-P4`,
+>    `K-12`, `K-52`, §3.12 link 3, and `A-35`'s third negative reporting outcome. **A mechanism in which no
+>    minted claim has ever lost is evidence that `C-XVI` has been breached in practice.**
+> 3. **Visible distinguishability is a PREREQUISITE of `C-XVI`, not a reporting nicety.** `L-25`, ⟦SOURCE⟧
+>    **§54**'s *system/human origin* clause and ⟦SOURCE⟧ **§39** each require it independently; **merging
+>    minted and filed claims into one population makes `PO-P2` unverifiable after the fact and `C-XVI`
+>    unenforceable.**
+>
+> **Why this must be a stated constraint, in one sentence:** ⟦ARCHITECT ANALYSIS⟧ **`PF-4` established that
+> the ONLY discriminator between a GROUND and an ANCHOR is falsifiability; `PO-P4` supplies falsifiability
+> in the owner's own words; and `C-XVI` is the rule that keeps the implementation from taking it back.**
+> **Without `C-XVI`, `PO-P1` and Reading G are observationally identical in every case where no competing
+> claim exists, `C-XI` is breached in practice while intact in wording, and the `(CP × client × Project)`
+> triple becomes the attribution anchor by behaviour — which AD-01K's Candidate A and AD-01L's Alt 4 were
+> each eliminated for being.**
+
+**The ratifications, consolidated. Every one of them is an ARCHITECT'S derivation FROM the decision, never
+the decision's own words, which is why each requires the owner and not the implementation.**
+
+| # | What must be ratified | Where it was derived | Why it cannot be left to implementation |
+|---|---|---|---|
+| **`C-XVI`** | **A registration-grounded claim gets no privileged resolution of any kind, and losing must be reachable.** | `PF-4`, `P-G` step 5, `§3.14`, and stated in full above | ⟦SOURCE⟧ **§88** MUST-ASK: authorization rules. **This is the single most important ratification in the document.** **The entire safety of `PO-P1` rests on it, and the natural implementation shortcut — a default win for the only claim on the Inquiry — converts `PO-P1` into the reading the owner has already eliminated, by a route `C-XI`'s wording does not reach.** AD-01B §4: unrecoverable once history accumulates. |
+| **`P-G`** | **The six-step grounding pathway in [§3.1](#31-determination-1--the-registration--attribution-pathway), in full, including that step 3's operands are `(CP, client, Project, G)` and NOTHING ELSE, and that step 6 is unchanged.** | `§3.1` | ⟦SOURCE⟧ **§88** MUST-ASK: canonical entities, relationships, CP commission logic, source-of-truth rules, audit requirements. **`P-G` is the architect's rendering of `PO-P1 … PO-P12` into an ordered rule with a named actor and a governing authority at each step. The owner said what may happen; `P-G` says in what order, at whose hand, and under which rule. If any step's actor or authority is not what the owner intends, `P-G` changes and most of §3 changes with it.** |
+| **`C-XV`** | **The MINTING test and the ELIGIBILITY test are two distinct evaluations over the same sequence at two different dates, and neither may be substituted for, cached as, or inferred from the other — and NEITHER RESULT MAY BE STORED ON THE REGISTRATION.** | `§3.1`, `PF-5` | **The two tests share three of their four operands and differ only in a date.** **Evaluating once and reusing MERGES conjunct (i) with conjunct (iii), which `C-XI` and `NF-28` both forbid in terms.** Left to implementation the merge is the cheaper code and will be written. **`C-XV`(3) is also what keeps the registration stateless — no `grounded`, `consumed`, `used`, `spent` or `expired` marker of any kind.** |
+| **`PF-6`'s conclusion** | **That NOTHING is added: no `Registration-Derived Claim` entity, no Inquiry→Registration reference as a distinct artefact, no grounding/consumption marker, no Inquiry→Inquiry succession reference, and no `Attribution Basis` object.** | `§3.2` | ⟦SOURCE⟧ **§88** MUST-ASK: canonical entities. **A recommendation to add NOTHING still needs approval, because the alternative is unrecoverable after history accumulates** (AD-01B §4, `I-9`, and AD-01O's identical ratification of `OF-6`). **Five candidates were tested and all five FAILED; the owner is being asked to confirm the failures, not to re-run them.** |
+| **`PF-23`'s conclusion** | **The citation is CLAIM-BORNE: the minted claim carries the reference to the specific registration record, and the Inquiry's reference to that registration is DERIVED from its claim set.** | `§3.11` | ⟦SOURCE⟧ **§88** MUST-ASK: canonical entities, relationships, audit requirements. **`PO-P11` says *"an Inquiry must explicitly reference the CP Project Registration record."*** **If the owner intends that LITERALLY — a reference held by the Inquiry itself, in addition to or instead of the claim's citation — that is available and it is the owner's to choose, and it should be chosen KNOWINGLY: an Inquiry-level reference cannot represent two CPs each minting on one Inquiry (`O-U`(5), `AC-20`), and two references that can disagree is the defect `G-8`, `G-9`, `J-36`, AD-01A §3.6/§5.2 and `OF-6` have each refused.** **This is offered as the form in which `PO-P11` can actually be MET, not as a narrowing of it.** |
+| **`PO-P7`(b)** | **That the registration actor is expressed as a PERMISSION, scope-bound to the Project — not as the role name *"Helpdesk."*** Folded into **`A-27`** | `§3.7`, `PF-16` | ⟦SOURCE⟧ **R2**, verbatim: *"Roles are tenant-scoped rows, not an enum … Application logic never branches on a role name."* ⟦SOURCE⟧ **§03** lists *"Helpdesk"* among builder-side users — **that is a default role LABEL, not a permission.** **Whether the owner intends the permission to be held ONLY by the default `Helpdesk` role, or by any tenant-defined role granted it, is a §88 authorization answer and is NOT decided here.** |
+| **`PF-12`'s second answer** | **That a claim validly minted under a then-live registration is NOT invalidated when that registration later expires.** | `§3.5` | ⟦ARCHITECT ANALYSIS⟧ **It is FORCED — by `C-II`, `K-17`, `PO-O10` and ⟦SOURCE⟧ **§54** — but it is money-bearing and counter-intuitive, and `PO-P5` states only its neighbour.** **The owner should ratify it deliberately rather than discover it, because its visible consequence (`PF-13(1)`) is a CP recorded as the producer of an engagement that converted and not paid for it — and ⟦SOURCE⟧ **§39** shows the CP exactly that.** |
+| **The six-link audit chain** | **[§3.12](#312-determination-12--auditability-of-the-registration--attribution-chain)'s six links and four read properties — in particular the NEW mint event and the requirement that where the cited and the consulted registration DIFFER, both are retained together with the fact that they differ.** Folded into **`A-28`**(b) | `§3.12` | ⟦SOURCE⟧ **§88** MUST-ASK: **audit requirements.** ⟦SOURCE⟧ **R6**: *"joining to live tables to render history is wrong"*, and its retention is *"12 months hot"* while **a CP commission dispute can surface years after a booking.** **The claim, its citation, the determination and the exception are BUSINESS FACTS on business records, audited IN ADDITION — not facts that live only in the audit log.** |
+| **`A-21`** | **CONFIRM, do not re-decide.** The admissible base is a SPECIFIC registration record's own fixed date, never *"the triple's registration date."* | `§3.11`, `PF-24` | ⟦PRODUCT-OWNER DECISION⟧ **`PO-P12`'s final clause states exactly this in the owner's own words, so `A-21` is ANSWERED IN SUBSTANCE.** **It still requires the owner's signature, because `A-21` is an unmade amendment to AD-01L and only the owner may make it.** |
+| **`A-25` + `A-34`** | **The policy mapping: Policy C proper, registration-anchored, condition-only, `N-4`-independent — plus TWO bounded Policy-E layers, not one.** | `§3.16` | ⟦SOURCE⟧ AD-01M **§11.2** makes E's audit obligations live wherever E appears: *"the human decision, its date, its author, and its stated reasons — for every case."* **`PO-N9` supplies that for the exception layer; ⟦SOURCE⟧ §11 plus `C-V` supply it for the adjudication layer. If the owner does not intend the second layer to carry §11.2's obligations, the mapping is wrong and `A-34` changes.** |
+
+### 5.2 The five NEW questions, and the rest carried forward
+
+> ⟦BUSINESS DECISION REQUIRED⟧ **Five items are new and are numbered `AC-22 … AC-26`, continuing AD-01M's,
+> AD-01N's and AD-01O's series. NO NEW NUMBERING NAMESPACE IS CREATED.** **None is answered here, no default
+> is implied for any of them, and each is stated in full for the first time — §2 and §3 name them, and a
+> name is not a question.**
+
+| # | Question | Arises from | Why it cannot be left to implementation |
+|---|---|---|---|
+| **`AC-22`** | **When the registration whose window contains the MINTING GATE date `G` and the registration whose window contains the BOOKING date `B` are DIFFERENT records — of the same CP, over the same triple, separated by a lapse and a `PO-P8` re-registration — WHICH record governs `NF-28`'s conjunct (iii)? The record the claim CITED, or the record containing `B`? And whose `N` applies?** | `PF-5` configuration 2; `X-22`; `A-29`(b); `§3.13` conjunct (iii) | **`NF-28`'s conjunct (iii) was written against a single registration and `O-U` gives the triple a SEQUENCE.** **The two records may carry different `R` AND different `N`** (`PF-18(4)`), **so the two candidate answers can differ by weeks of protection, not by a day.** ⟦ARCHITECT ANALYSIS⟧ **Left to implementation, whichever join is written first settles it silently and permanently — and the claim's own citation makes the "wrong" answer look authoritative on the page.** **No answer is supplied and no default is implied.** |
+| **`AC-23`** | **May a live registration ground a claim on an Inquiry that was ALREADY LIVE when the registration became relevant — that is, on an Inquiry whose server-side clash gate has already passed?** | `PF-22`; `OF-12`; `C-VI` as refined by `A-11`; `Q11` | **Both readings are recorded at equal strength and NEITHER is selected.** **Under YES, `P-G` mints OUTSIDE `C-VI`'s window and `Q11`'s late-filing cut-off must be answered FIRST.** **Under NO, the registration confers NOTHING AT ALL in the owner's own `OF-12` configuration — a registration made while a live Inquiry already covers the interest produces no Inquiry of its own (`J-2`), so there is nothing for it to ground.** ⟦ARCHITECT ANALYSIS⟧ **`Q11` is BLOCKING either way, which is a status change and not a restatement: this is the first mechanism in the series that cannot be specified until `Q11` is answered.** |
+| **`AC-24`** | **Which date is the minting gate's `G` — the Inquiry's origination date, the server-side clash-gate evaluation date, or, for a ⟦SOURCE⟧ §12 offline capture, the SYNC-ARRIVAL date?** | `P-G` step 2; `A-11`'s refined `C-VI`; ⟦SOURCE⟧ **§12**; `AC-9`/`T-9` | **`AC-24` is `AC-5`'s COMPANION and must never be conflated with it:** `AC-5` selects the registration that answers conjunct (iii); **`AC-24` selects the registration that may ground a CLAIM — that is, whether a claim EXISTS at all.** ⟦SOURCE⟧ **§12**: *"Never pretend an offline lead has passed the server-side clash gate."* **The candidate dates can fall on OPPOSITE SIDES of a window boundary**, which makes `AC-24` **CLAIM-EXISTENCE-BEARING and not merely money-bearing.** **`T-9` is NOT resolved and `AC-9` is NOT resolved.** |
+| **`AC-25`** | **Is the mint at `P-G` step 4 AUTOMATIC — the system records the claim whenever the grounding test passes — or DISCRETIONARY, an explicit authorized act by a named actor? And separately: does an UNOPPOSED minted claim require the same §11 adjudication act as a contested one, or a lighter one?** | `P-G` step 4; `§3.10`'s unopposed-claim row; `C-V`; `L-10`; `C-XVI`(1) | ⟦ARCHITECT ANALYSIS⟧ **This is the largest unanswered DESIGN question the decision produces, and it sits at the top of the register alongside `AC-14`.** **Under AUTOMATIC minting, `L-10`'s finding bites at full strength — every concurrent-registration Inquiry becomes an item of §11 adjudication work for builder-side authorized leadership, and `PF-20(b)` makes that a workload consequence as much as a financial one.** **Under DISCRETIONARY minting, `PO-P1`'s grant is contingent on an operational act the owner has not described, and a CP whose ground plainly exists may never acquire a claim at all.** **`C-V` requires a claim to be RECORDED BY AN EXPLICIT AUTHORIZED ACT; `PO-P1` says the registration *"MAY be the basis,"* which is permissive and does not say by whom.** **The word "MAY" is NOT read as either answer, and no default is implied.** |
+| **`AC-26`** | **Is a registration's grounding power SINGLE-USE or REPEATABLE? May ONE live registration ground claims on SEVERAL Inquiries inside its own window — and does it ground a claim on an Inquiry opened AFTER that client's earlier purchase CONVERTED?** | `PF-8`; `§3.3`'s final row; `§3.14`'s `K-26` row | **`PO-P1` says a registration *"may be the basis for CP attribution on A LATER INQUIRY"* — singular — and does not say whether the power is spent by use.** **`Y-1` and `AA-1` are OPEN, and under some of their answers two live Inquiries on one `(client, Project)` are ORDINARY rather than exceptional; one registration would then ground a claim on EACH, and the CP would hold two minted claims from one registration act.** ⟦SOURCE⟧ **§11** names attribution manipulation as a live risk in its own words; `L-13` priced registration volume converting into forward options. **The post-conversion half must be answered WITHOUT reopening `K-26` or `T-5`, which are preserved exactly: `K-26` speaks about a discharged CLAIM and the registration is not one, so `P-G` does not run through its subject at all.** **`Y-1`, `AA-1`, `K-26` and `T-5` are NOT resolved, NOT narrowed and NOT branched.** |
+
+**The rest, carried forward — an INDEX onto [§3.17](#317-which-other-ac-and-open-items-this-decision-affects), which is the authority.**
+
+> ⟦ARCHITECT ANALYSIS⟧ **Grouped by what this decision DID to each item, so the owner can see the shape of
+> the register at a glance. **Nothing below re-litigates §3.17; each group's authority is the corresponding
+> row of §3.17's table and the status recorded there is the status that governs.** `AC-14` is deliberately
+> absent from every group and is taken alone at [§5.3](#53-ac-14-restated--the-question-this-decision-makes-acute).**
+
+| Effect | Items | Authority |
+|---|---|---|
+| **CLOSED** | **`AC-4`**; AD-01M's **`Q1`** | `§3.0`, `PF-3`; `§3.17` |
+| **ANSWERED (AD-01K's parameters)** | **`P-β`** (same project only) · **`P-γ`** (the registration's own window) · **`P-δ`** (contest) — and **`Q4`** with `P-β` | `§3.15`; `§3.17` |
+| **DE-GATED** | **`Q0-d`** — formally open as a ratification of `C-IX`'s reasoning, but **OFF this decision's critical path**, because `PO-P4` selects the one `P-δ` branch needing no §88 authorization change | `§3.10`, `PF-21` |
+| **NARROWED, NOT RESOLVED** | **`AA-4`** (`A-33`) · **`B-2`**'s ground half (`A-31`(a)) | `§3.2`, `§3.15` |
+| **PRIORITY RAISED — NOT ANSWERED** | **`AC-15`** and **`AC-20`** (CP-vs-CP precedence, and whether the second registration may exist) — **raised for a SECOND consecutive document, and now biting at EVERY Inquiry origination inside an overlap rather than only at a booking** · **`Q11`** — **consumer now BLOCKING** | `§3.9`, `PF-20(b)`; `§3.10`, `PF-22`; `§3.17` |
+| **ON A SECOND CRITICAL PATH** | **`AA-2`** (project-less preliminary registration) — `AD-01N NF-5(3)` put it on the registration's; **`P-G` step 3 requires the registration to name a Project to satisfy `PO-P1`'s *"same client/project,"* so a project-less registration can ground NOTHING** | `§3.17` |
+| **MATERIALLY SHARPER** | **`AC-3`** (claim-layer money-bearing) · **`AC-6`** (**TRIPLY** money-bearing — eligibility, re-registration admissibility, AND claim admissibility, and all three must use ONE convention) · **`AC-8`** (a fourth date derivation) · **`AC-9`**/**`T-9`** (claim-existence-bearing) · **`AC-10`** (newly claim-bearing) · **`AC-18`** (renewability now renews a GROUNDING POWER) · **`AC-21`** (now governs both the uniqueness rule and the grounding rule) · **`Q10`**/**`M-5`**'s uniqueness half (gating a SECOND mechanism; `A-26` acquires a claim dimension) | `§3.4`, `§3.8`, `§3.17` |
+| **ENLARGED, NOT RENUMBERED** | **`AC-13`** — by two items: does the §39 portal show a CP a claim **minted in their name that they did not file**, and **before** §11 adjudication? And does it show a CP that their own grounding power has **lapsed**? **`V-7` supplies the mechanism, not the content** | `§3.5`, `PF-13(3)`; `§3.17` |
+| **UNCHANGED — CHECKED, NOT SKIPPED** | **`AC-1`** · **`AC-2`** (gains a first-class case) · **`AC-5`** (gains a companion in `AC-24`) · **`AC-7`** (first half answered in substance; second half open and slightly sharper) · **`AC-11`** (**explicitly NOT relieved**, for a second and structurally different reason) · **`AC-12`** · **`AC-16`** · **`AC-17`** · **`AC-19`** · **`N-4`** (still OFF the path unless `AC-14` goes the (L-6·engagement) way) · **`AA-1`**, **`AA-3`**, **`AA-5`** · **`AB-1`**, **`AB-2`**, **`AB-3`** (`AB-3` gains a new inbound route) · **`T-1`**, **`T-3`**, **`T-5`**, **`T-6 … T-11`** · **`V-4`**, **`W-1`** · **`Y-1`**, **`Y-3`**, **`Y-4`**, **`Y-5`** · **`Z-2`**, **`Z-5`** · **`M-9`** | `§3.17`, final rows |
+| **NOT ANSWERED** | **`Q0-a`**, **`Q0-b`**, **`Q0-c`**, **`Q0-e`** — **`Q0-e`'s list is now `A-1 … A-35`** | `§4.5` |
+
+### 5.3 `AC-14` restated — the question this decision makes acute
+
+> ⟦BUSINESS DECISION REQUIRED — `AC-14`, RESTATED AND NOT RENUMBERED⟧
+>
+> **Does a `CP Project Registration` whose Inquiry was closed on Dimension A's INVALID side — wrong number,
+> fabricated entry, non-opportunity — retain its protection window; and now that `PO-P1` has been granted,
+> does it retain its power to GROUND an attribution claim on a later Inquiry?**
+>
+> ⟦ARCHITECT ANALYSIS⟧ **`AC-14` is stated alone, in its own subsection, because [§3.17](#317-which-other-ac-and-open-items-this-decision-affects)
+> records that its *"priority rises to the top of the register alongside `AC-25`,"* and because it is the
+> ONLY open item in the register whose answer changes the OPERAND SET of the rule this document recommends.
+> Every other item parameterises `P-G` — a date, a convention, a winner, a timezone, a cadence. `AC-14`
+> RE-SHAPES it.**
+
+**What is already settled and must NOT be re-asked.**
+
+| Settled | Authority |
+|---|---|
+| The lock-in rule is **closure-reason-blind** | `NF-2(2)`, `NF-19(3)` |
+| **A Dump is not an input in any direction**, and an expiry is not a Dump | `NF-21`; AD-01O §2.7 |
+| **`PO-N4` names nothing that moves a registration**; `PO-N3` forbids the CP resetting, restarting, refreshing or extending the window | ⟦PRODUCT-OWNER DECISION⟧ `PO-N3`, `PO-N4` |
+| **`PO-P5` and `PO-P6` bear only on EXPIRY and on REVISITS** — neither says anything about a closure classification | ⟦PRODUCT-OWNER DECISION⟧ `PO-P5`, `PO-P6` |
+| **Reading H is selected and `AC-4` is closed** | `§3.0`, `PF-3`, `X-18`, `A-29`(a) |
+| **`P-G` step 3's operands are `(CP, client, Project, G)` and the closure classification is NOT among them** | `§3.1` |
+
+> **Therefore the trace is not in doubt and is not the question.** CP A registers a client for Project A. The
+> Inquiry is closed on Dimension A's invalid side. **The registration is untouched and remains live.** A
+> genuine direct inquiry then arrives from that person inside the window. **Under `P-G` step 3 the grounding
+> test PASSES.** **Whether it SHOULD is `AC-14`.**
+
+**The tension, stated at equal strength in both directions. `X-5`'s condition — *"the tension resurfaces the
+moment `B-2` is granted"* — is now MET, so `AC-14` is no longer conditional on anything.**
+
+| | **Reading (L-6·ground)** — `L-6` is about the CLOSED INQUIRY being used as a ground | **Reading (L-6·engagement)** — `L-6` is about the ENGAGEMENT having been classified as never having existed |
+|---|---|---|
+| **What it says about `P-G`** | **`P-G` is UNTOUCHED.** The registration is a different record, classified by nobody, and the incoherence `L-6` identifies does not arise. **`L-6` neither permits nor forbids `P-G`** | **`P-G` is REACHED.** A registration asserting *"this client was introduced for this Project"* over a person the business has recorded as a wrong number is **the same incoherence one level out** |
+| **Effect on `N-4`** | **STAYS OFF the critical path** — `X-6` confirmed a second and independent time | **GOES BACK ON IT.** A closure-class list becomes an OPERAND of the minting gate, which is the dependency AD-01M §8.1 priced and which the owner's choice of condition had removed |
+| **Effect on `AC-1`** | **Does not arise from this rule** | **REVIVED and made money-bearing** — the authorization posture of the closing-reason tap now governs whether a claim may exist |
+| **Effect on `P-G` step 3's operand set** | `(CP, client, Project, G)` | **`(CP, client, Project, G, the closure classification of prior Inquiries on that work record)`** — a materially larger and more expensive rule, **and one `C-XIV` must then be re-tested against, because the added operand is a fact about a WORK history** |
+| **Effect on `L-13`'s farming control** | ⟦ARCHITECT ANALYSIS⟧ **The control does NOT operate on `P-G` at all**, because `P-G` never consults the closure. **Combined with `AC-18`'s unbounded renewability, the hazard `L-13`, `MF-9` and `X-13` each named is at its HIGHEST STATED LEVEL in the series** | **The control operates.** `L-13` named `K-22`/`L-6` as *"the primary control against this cost"* and under this reading it is doing that work |
+| **What remains as a control under either reading** | **Every registration is an explicit, permissioned, separately audited act carrying its own date (`C-XIII`, `NF-26(9)`, `NF-27`); every mint is separately audited with its system-origin recorded (§3.12 link 2); every minted claim must WIN a §11 adjudication before it is worth anything (`PO-P4`, `C-XVI`).** **The behaviour is visible and attributable rather than silent — which is a real control and is not the same as a bound** | Same, **plus** the closure classification | 
+
+> ⟦ARCHITECT ANALYSIS⟧ **Why this is the sharpest item the decision produces, stated in four sentences and
+> without softening.**
+>
+> 1. **It is the only open item that changes what `P-G` READS.** `AC-6` moves a day, `AC-22` picks a record,
+>    `AC-15` picks a winner, `AC-25` picks an actor. **`AC-14` picks the rule's inputs.**
+> 2. **It is the only open item that can put `N-4` back on the critical path**, and `N-4` is the item AD-01M
+>    §14 Step 3 identified as the expensive prerequisite of Policy C — **the prerequisite the owner's own
+>    choice of condition had just removed** (`X-6`, `§3.16`).
+> 3. **It is the only place where the decision's greatest structural virtue is also its greatest exposure.**
+>    `P-G`'s closure-blindness is what makes it `N-4`-independent, cheap, deterministic and auditable — **and
+>    it is the same property that makes a fabricated registration indistinguishable from a real one at the
+>    minting gate.**
+> 4. **It is visible to the CP.** ⟦SOURCE⟧ **§39** shows the CP their attribution and their eligibility, so
+>    whichever way this is answered, the CP sees the consequence.
+
+> **What `AC-14` is NOT, stated because the request is narrow and could easily be over-read.**
+>
+> **It is NOT a request to ratify or reject `L-6`, and it is NOT a request to reopen `K-22`.** **`L-6` and
+> `K-22` are NOT reopened, NOT narrowed and NOT ratified by anything in this document.** **It is a request to
+> state `L-6`'s SCOPE** — because `L-6` claims necessity (*"not a policy the owner may or may not adopt; it
+> is a fact the model cannot record coherently"*) **and a claim of necessity requires a determinate scope.**
+> **`A-32` is the amendment that would follow, and its CONTENT is determined by the owner's answer, not by
+> the architect** ([§4.1](#41-the-nine-amendments-named-and-not-made)).
+>
+> **Both readings are recorded at EQUAL STRENGTH. NEITHER is selected, preferred, ranked, hinted at or made
+> easier to choose.** ⟦SOURCE⟧ Spec **Rule 1**, **§88**, **§97**. **This is the Project Owner's alone.**
+
+### 5.4 What the owner should take first
+
+> ⟦ARCHITECT ANALYSIS⟧ **Ordered by how many other items each answer unblocks, NOT by importance. This is
+> SEQUENCING ADVICE, not a decision, and it does not rank the questions' commercial weight.**
+>
+> 1. **Ratify [§5.1](#51-the-ratifications-this-document-itself-requires)'s derivations — `C-XVI` FIRST**,
+>    then `P-G`, `C-XV`, `PF-6`'s no-new-entity conclusion and `PF-23`'s claim-borne citation. **Everything
+>    in [§3](#3-the-reconciled-architecture) depends on `P-G`, and the SAFETY of everything in §3 depends on
+>    `C-XVI`.**
+> 2. **`AC-25` — automatic or authorized.** **It decides whether `L-10`'s workload finding bites at full
+>    strength and whether `PO-P1` executes without an operational act the owner has not yet described.**
+> 3. **`AC-14` ([§5.3](#53-ac-14-restated--the-question-this-decision-makes-acute)) — the only item that
+>    changes the rule's operand set**, and the only one that can put `N-4` and `AC-1` back on the path.
+> 4. **`AC-15` and `AC-20` together — THIRD consecutive document.** ⟦ARCHITECT ANALYSIS⟧ **The owner should
+>    be told which §88 column the answer sits in BEFORE giving it: `C-IX` holds that a binding systemic
+>    precedence rule is an AUTHORIZATION change to §11, not a commission setting. No precedence is invented.**
+> 5. **`AC-6` — one word (α or β), now moving THREE money-bearing outcomes that must agree**, on pain of a
+>    single day producing two live registrations for one triple and defeating `OF-4`'s determinacy.
+> 6. **`AC-22`, `AC-24`, and `AC-23` with `Q11`** — the sequence, the gate date and the already-live Inquiry.
+>    **`Q11` is now blocking and cannot be deferred behind this rule.**
+> 7. **`AA-2`, and `AC-21` with `M-5`'s uniqueness half** — the two items that gate `P-G`'s own operands.
+>    **Cheap now; unrecoverable once registrations and claims accumulate** (AD-01B §4).
+> 8. **`AC-26`, `AC-18`, and the remainder in the commercial sitting that FIVE consecutive documents have now
+>    recommended** — AD-01L §15, AD-01M §14, AD-01N §M, AD-01O §5.5 and this section.
+> 9. **Ratify or reject `A-1 … A-35`** (`Q0-e`). **Thirty-five unmade amendments across nine documents. They
+>    cannot all be approved as literally written.**
+> 10. ⟦SETTLED⟧ **`V-4` remains the cheapest unblocking question in the register and has now been recommended
+>    by SEVEN consecutive documents without being taken.** **It does not block this decision and this
+>    decision does not block it.**
+
+---
+
+## 6. Recommendation
+
+> ⟦ARCHITECT RECOMMENDATION — advisory only⟧ *(This is a recommendation about **SEQUENCE and READINESS**. It
+> is **NOT** an approval, **NOT** a self-authorization, and **NOT** permission to build anything. ⟦SOURCE⟧
+> **§88** places this decision in **five** MUST-ASK columns simultaneously — canonical entities,
+> relationships, financial logic, CP commission logic, authorization rules — plus audit requirements.
+> **Delegation to an architect is not authorization.** Per CLAUDE.md: assigning work to `architect` does not
+> satisfy the §88 layer, and nothing in [§3](#3-the-reconciled-architecture),
+> [§4](#4-the-amendment-register) or [§5](#5-remaining-product-owner-questions-and-ratifications) becomes
+> approved by having been written.)*
+
+### **VALIDATE**
+
+**Not BUILD NOW. Not BUILD LATER. Not REJECT.**
+
+**Why not REJECT.** ⟦PRODUCT-OWNER DECISION⟧ **The decision is the Project Owner's, it is internally
+coherent, and — decisively — it is not merely compatible with the architecture, it IMPROVES it in four
+respects that are worth naming rather than summarising.** **`PO-P4` supplies the falsifiability clause that
+`C-XI` needed and could not supply for itself** (`PF-4`); **it selects the ONE branch of `P-δ` that requires
+no §88 authorization change to §11** (`PF-21`, `C-IX`), which is the largest governance result in the
+document; **`PO-P10`'s seven levels map onto the architecture's existing six WITHOUT A SINGLE ADDITION**
+(`§3.13`); and **`PO-P12` states `A-21`'s traceability requirement in the owner's own words**, corroborating
+from the owner's direction what AD-01L and AD-01O derived from the architecture's. **`AD-01K requires NO
+amendment at all.** Nothing about the decision needs to be argued back to the owner. **What it contradicts
+is a small number of the architect's own unapproved recommendations — `C-VIII`'s *"and from nothing else,"*
+`B-2`'s stated ground, `NF-30`'s conditional mapping — and never an approved decision anywhere.**
+
+**Why not BUILD NOW.** ⟦ARCHITECT ANALYSIS⟧ **Because the architecture is now determinate in OUTLINE and
+indeterminate in OPERANDS, and consolidated §30 forbids letting implementation settle the second.** **This
+document has reduced the number of possible ARCHITECTURES from one-and-a-half to ONE** (`§3.17`): there is
+now exactly one pathway, it reuses `B-2`'s citation mechanism entirely, it adds no entity, and §11 needs no
+amendment. **But a rule is not implementable because its SHAPE is settled. `P-G` step 3 cannot be specified
+without knowing which date `G` is (`AC-24`), which boundary convention bounds it (`AC-6`), or whose
+timezone projects it (`AC-8`). `P-G` step 4 cannot be specified without knowing whether the mint is
+automatic or authorized (`AC-25`). `P-G` step 5 cannot be specified without `C-XVI` being ratified, and
+without knowing whether an unopposed claim is adjudicated like a contested one. `P-G` step 6 cannot be
+specified without knowing which registration governs conjunct (iii) when two are in play (`AC-22`).** **Four
+of the six steps have an unanswered operand, and every one of those operands is an owner answer rather than
+an architecture problem.**
+
+**And three findings in this document are, on their own, disqualifying for BUILD NOW:**
+
+- **`AC-14` is ACUTE and sits at the TOP of the register** (`§3.17`, `§5.3`). **`X-5`'s condition is MET.**
+  **It is the only open item that changes what `P-G` READS**, and answering it one way puts `N-4` and
+  `AC-1` back on the critical path that the owner's own choice of condition had just taken them off.
+- **`AC-15` and `AC-20` are NOT ANSWERED and their priority is RAISED AGAIN — a third consecutive
+  document.** **Under this decision they stop biting at bookings and start biting at EVERY Inquiry
+  origination inside an overlap** (`PF-20(b)`), **which converts an occasional financial question into a
+  standing workload on builder-side authorized leadership** (`L-10` realised). **No precedence is invented,
+  and `C-IX` still holds that inventing one is a §88 authorization change.**
+- **`AA-2` is now on a SECOND critical path.** **`P-G` step 3 requires the registration to name a Project in
+  order to satisfy `PO-P1`'s *"same client/project,"* so a project-less registration can ground NOTHING** —
+  and `AA-2` asks whether project-less registrations exist at all.
+
+**Why not BUILD LATER.** ⟦ARCHITECT ANALYSIS⟧ **Because *later* implies the blockers need further ANALYSIS,
+and they do not.** **Every item on the gating list below is a one-sentence answer from the Project Owner:
+which date, which convention, which record, who acts, does a fabricated registration count, may a second CP
+register.** **A further architect document would be analysis substituting for a decision — AD-01L's own
+words, applied now for the fourth time.** **Shelving would also waste what the decision has already bought,
+and what it has bought is substantial:**
+
+- **`AC-4` is CLOSED after SEVEN consecutive documents, and with it AD-01M's `Q1`** — the highest-leverage
+  question in the register since AD-01M §14 Step 2.
+- **Three of AD-01K's four parameters are ANSWERED (`P-β`, `P-γ`, `P-δ`) and the fourth (`P-α`) is taken OFF
+  the path** — `N-4` confirmed off the critical path from a second and independent direction.
+- **`Q0-d`/`C-IX` is DE-GATED**: the owner selected the branch that sits behind no additional §88 bar, so
+  ⟦SOURCE⟧ **§11 requires no amendment whatsoever.**
+- **`K-18` is CONFIRMED for a third consecutive document, and AD-01K is amended NOWHERE** — the strongest
+  available evidence that the attribution anchor was right.
+- **`I-9`'s no-new-entity standard is MET for the EIGHTH consecutive document**, with five candidate
+  artefacts tested and all five failing.
+- **`B-2`'s closure-grounded branch changes status from BLOCKING to OPTIONAL** — the architecture executes
+  without it (`PF-25`). **That is a real change and it is the second-largest result in the document.**
+- **`C-XIV` gains a second, independent justification** (`PF-15`): it is what keeps `PO-P1` safe, by holding
+  the grounding test's operand set to `(CP, client, Project, date)` and nothing else.
+
+### 6.1 The gating list — what must be answered before anything is built
+
+> ⟦ARCHITECT ANALYSIS⟧ **Stated as an explicit, closed, named list, because `VALIDATE` without a gating list
+> is indistinguishable from `BUILD NOW` with a caveat.** **Ten items. Every one is an owner answer. NONE is
+> answered here, NO default is implied for any of them, and nothing below is softened.**
+
+| # | Gate | Status |
+|---|---|---|
+| **1** | **`C-XVI`** — a registration-grounded claim gets no privileged resolution of any kind | **STATED FOR THE FIRST TIME at [§5.1](#51-the-ratifications-this-document-itself-requires). UNRATIFIED.** Without it `PO-P1` becomes the reading the owner has already eliminated, by a route `C-XI`'s wording does not reach |
+| **2** | **`P-G`, `C-XV`, `PF-6`'s no-new-entity conclusion, `PF-23`'s claim-borne citation, `PF-12`'s survival rule, and the six-link audit chain** | **ALL ARCHITECT DERIVATIONS. ALL UNRATIFIED.** §5.1 |
+| **3** | **`AC-25`** — automatic mint or authorized discretionary act; and is an unopposed minted claim adjudicated like a contested one | **NOT ANSWERED. Top of the register.** It decides whether `PO-P1` executes at all and what `L-10`'s workload is |
+| **4** | **`AC-14`** — does an invalid-side closure retain its protection window and its grounding power | **NOT ANSWERED. Top of the register.** [§5.3](#53-ac-14-restated--the-question-this-decision-makes-acute). **The only item that changes `P-G`'s operand set** |
+| **5** | **`AC-15` and `AC-20`** — who wins between two live registrations, and may the second exist | **NOT ANSWERED. PRIORITY RAISED A THIRD TIME.** No precedence invented; `C-IX` names the §88 column |
+| **6** | **`AC-22`** — which registration governs conjunct (iii) when the cited and the consulted record differ | **NOT ANSWERED.** `PF-5` configuration 2; `A-29`(b). **Weeks of protection turn on it, not a day** |
+| **7** | **`AC-24`, with `AC-9`/`T-9`; and `AC-23` with `Q11`** — which date is `G`, offline included; and may an already-live Inquiry be minted on | **NOT ANSWERED. `Q11` is now BLOCKING.** Both are claim-EXISTENCE-bearing |
+| **8** | **`AC-6`** — the boundary convention, now **TRIPLY** money-bearing, and all three uses must agree | **NOT ANSWERED. PRIORITY RAISED A SECOND TIME.** Disagreement produces two live registrations for one triple on a boundary day |
+| **9** | **`AA-2`; and `AC-21` with `M-5`'s uniqueness half** | **NOT ANSWERED.** Both gate `P-G`'s own operands — the Project term and the client term |
+| **10** | **`AC-26`** — is the grounding power single-use or repeatable, inside the window and after a conversion | **NOT ANSWERED.** Coupled to `Y-1`, `AA-1`, and to `K-26`/`T-5`, which are preserved exactly |
+
+**What VALIDATE means concretely.**
+
+1. **Take [§5.4](#54-what-the-owner-should-take-first)'s items 1–3 first** — ratify `C-XVI` and `P-G`, then
+   `AC-25`, then `AC-14`. **Three answers close four of the ten gates.**
+2. **Take the remainder in the commercial sitting that FIVE consecutive documents have now recommended.**
+3. **Ratify or reject `A-27 … A-35` alongside `A-1 … A-26`** (`Q0-e`). **Thirty-five unmade amendments
+   across nine documents.**
+4. **Nothing may be built meanwhile that presupposes an answer.** ⟦SOURCE⟧ consolidated **§30**.
+   **Specifically NOT to be built:** no CP registration record, no registration sequence, no uniqueness
+   constraint of any kind, no expiry flag, no re-registration act, no lock-in configuration attribute, **no
+   minting gate, no grounding test, no minted claim, no claim-citation reference, no registration-derived
+   claim population, no `Attribution Basis` object, no grounded/consumed/used/spent marker on a
+   registration, no Inquiry-level registration reference**, no eligibility determination artefact, no
+   exception record, no override permission, no `Visit`/`Revisit` entity, no `is_revisit` field, no visit
+   counter, no commission scaffolding of any kind, **no precedence or tiebreak between two claims**, and no
+   Dump-reason value list.
+
+### 6.2 Is the CP architecture now implementation-ready? — **NO**
+
+> ⟦ARCHITECT ANALYSIS⟧ **`PF-32` — stated explicitly and without softening, because *"the owner has decided
+> it"* is even easier to read as *"it is settled"* than *"the owner has clarified it"* was.**
+>
+> **The CP architecture is NOT implementation-ready, and this decision does not make it ready.**
+>
+> **What HAS changed is the KIND of gap that remains, and that change is real.** AD-01O closed by reporting
+> that the register's largest item was *"does a protection fact license a claim?"* — **an ARCHITECTURAL
+> question, because the two answers produced two different architectures.** **That question is now answered.
+> Everything on [§6.1](#61-the-gating-list--what-must-be-answered-before-anything-is-built)'s list except
+> `AC-14` is a PARAMETER of one architecture rather than a choice between two.** **`AC-14` is the exception,
+> and that is precisely why [§5.3](#53-ac-14-restated--the-question-this-decision-makes-acute) takes it
+> alone.**
+>
+> **The honest arithmetic, and it is not flattering to the count even though it is favourable to the
+> shape.** This decision **CLOSES two items outright** (`AC-4`, `Q1`), **ANSWERS three of AD-01K's four
+> parameters and takes the fourth off the path**, **DE-GATES one blocker** (`Q0-d`/`C-IX`), **NARROWS two**
+> (`AA-4`, `B-2`'s ground half), **SHARPENS eight**, **RAISES the priority of four** (`AC-14`, `AC-15`,
+> `AC-20`, `Q11`) **and ADDS FIVE** (`AC-22 … AC-26`). ⟦ARCHITECT ANALYSIS⟧ **It reduces the number of
+> possible ARCHITECTURES from one-and-a-half to ONE. It reduces the number of BLOCKING QUESTIONS by roughly
+> one, and it CHANGES WHICH ONES BLOCK — and a register that shrinks by one while its composition turns over
+> is not a register that has been cleared.**
+>
+> ⟦SETTLED⟧ **`M-9`, the commission model, still cannot start.** It consumes `K-18`, `K-48` as extended by
+> `NF-28`, `K-47`, `K-26`, `AA-3`, `AB-1 … AB-3`, `AC-1 … AC-3`, `AC-5 … AC-21` and now `AC-22 … AC-26`,
+> `O-U`, `P-G` and `C-XVI`. **`B-2`'s answer is no longer among its blockers, which is a genuine reduction —
+> and it is the only one.** **Starting `M-9` before the sitting would still require inventing every one of
+> the rest.**
+>
+> ⟦ARCHITECT ANALYSIS⟧ **One closing observation about the exchange rate, offered as an observation and not
+> as an argument for building.** **A decision that closes a seven-document question, answers three of four
+> parameters, de-gates a §88 blocker, requires no new entity and amends AD-01K nowhere — while costing nine
+> unmade amendments and five new open items — is a good trade. It is not a finished trade. The nine
+> amendments and the ten gates are the unpaid half of it, and they are the Project Owner's to pay.**
+
+---
+
+## Closing note
+
+**STATUS: PROPOSED — NOT APPROVED. RECONCILIATION — ADVISORY. NOT AN APPROVAL TO IMPLEMENT.**
+
+**This document is a reconciliation and a recommendation, not a decision and not an approval.**
+[§6](#6-recommendation)'s **VALIDATE** is **advisory.** **Nothing here is self-authorizing, and being asked
+to reconcile a Product-Owner decision is not permission to build what it implies.** ⟦SOURCE⟧ Spec **§88**:
+canonical entities, relationships, financial logic, CP commission logic, authorization rules and audit
+requirements are all **MUST ASK BEFORE DECIDING**; *"inventing business rules"* is **MUST NEVER DO WITHOUT
+EXPLICIT AUTHORIZATION**. ⟦SOURCE⟧ Consolidated **§30**: *"No schema/code implementation should be inferred
+from an unresolved product ambiguity."*
+
+**The Product Owner's decision is NOT re-argued, NOT weighed and NOT softened anywhere above.** It is
+⟦PRODUCT-OWNER DECISION⟧ throughout, recorded verbatim at
+[§1.2](#12-the-decision-recorded-verbatim-before-any-analysis) as `PO-P1 … PO-P12` **before any analysis
+touched it.** Everything the architect adds — **`P-G`**, the constraints **`C-XV`** and **`C-XVI`**, the
+findings **`PF-1 … PF-32`**, the contradictions **`X-18 … X-22`** and the amendments **`A-27 … A-35`** — is
+⟦ARCHITECT RECOMMENDATION⟧ or ⟦ARCHITECT ANALYSIS⟧ and is **NOT APPROVED.**
+
+**No prior document is modified.** AD-01, AD-01A, AD-01B, AD-01C, AD-01E, AD-01F, AD-01G, AD-01H, AD-01I,
+AD-01J, AD-01K, AD-01L, AD-01M, **AD-01N** and **AD-01O** are all **unedited**, and
+[§4.4](#44-no-prior-document-was-silently-edited--determination-17-stated-as-a-checked-fact) states that as
+a **checked fact** against the repository's own history rather than as an intention. **AD-01N remains at
+`VALIDATE` and is not approved; AD-01O remains advisory and is not approved.** **The nine amendments this
+document finds necessary — `A-27 … A-35`, across eleven limbs and four target documents — are NAMED and NOT
+MADE, and only the Project Owner may make them.** `A-1 … A-26` remain named and not made. **`A-34` is
+introduced in [§4.1](#41-the-nine-amendments-named-and-not-made) rather than in §3, and the reason is
+recorded at `PF-28` rather than left implicit.** **The reserved contradiction range `X-18 … X-24` is NOT
+exhausted: five contradictions were found and `X-23` and `X-24` are NOT ALLOCATED, because no sixth
+surfaced and inventing one would be the same defect as inventing a business rule.**
+
+**NO NEW ENTITY IS PROPOSED BY THIS DOCUMENT.** The necessity test was run in full against five candidate
+artefacts ([§3.2](#32-determination-2--a-new-mechanism-or-an-existing-one)) — a distinct
+`Registration-Derived Claim`, an `Inquiry → Registration` reference, a grounding/consumption marker, an
+`Inquiry → Inquiry` succession reference, and an `Attribution Basis` object — **and ALL FIVE FAILED.** **The
+registration → attribution pathway REUSES AD-01L's `B-2` citation mechanism in its entirety, substituting
+the `CP Project Registration` record for the closed predecessor Inquiry as the citation's ground.**
+**`I-9`'s standard is MET for the eighth consecutive document.**
+
+**No SQL, schema, migration, master value, column, table, index, constraint or type is authorized by
+anything above, and none may be derived from it — `P-G`, `C-XV` and `C-XVI` are BUSINESS RULES and are
+expressly NOT database artefacts of any kind.** **No commission formula, rate, slab, percentage, amount,
+milestone value, clawback quantum, passback rule or TDS treatment appears anywhere — `M-9` owns all of it.**
+**No lock-in number, minimum, maximum or default is proposed.** **No UI, screen, workflow, approval step or
+gate is designed.** **No Dump-reason value is proposed.** **No precedence rule between two CPs is invented.**
+**No re-registration cadence, minimum gap or cap is invented.** **No boundary convention is selected.** **No
+mechanism that extends, resets, refreshes or tolls a LIVE protection window is proposed, designed or implied
+— `PO-N3`, `PO-N4`, `PO-O6` and `PO-P6` are honoured literally.** **No state, flag, marker or lifecycle of
+any kind is added to the registration — it *"has no states"* and it acquires none here.**
+
+**`Q1` is ANSWERED by the owner and is therefore not reopened by the architect; `Q4`, `Q6`, `Q7`, `V-1`,
+`V-2`, `V-3`, `V-7`, `V-11`, `V-12`, AD-01J's `J-2` and AD-01K's `K-18` attribution anchor are NOT reopened —
+and `K-18` is CONFIRMED for a THIRD consecutive document.** **`K-26` and `T-5` are preserved exactly.**
+**`L-6` and `K-22` are NOT reopened, NOT narrowed and NOT ratified — `A-32` asks only that `L-6` state its
+own scope, and `AC-14` owns the answer.** **`M-5`'s uniqueness half and `Q10` are NOT resolved — they are
+NAMED as gating a second mechanism, and naming a dependency is not resolving it.** **No unrelated open item
+is resolved** — `AA-1`, `AA-3`, `AA-5`, `AB-1 … AB-3`, `AC-1 … AC-3`, `AC-5 … AC-13`, `AC-15 … AC-21`,
+`N-4`, `T-1`, `T-3`, `T-6 … T-11`, `Q10`, `Q11`, `V-4`, `W-1`, `Y-1`, `Y-3`, `Y-4`, `Y-5`, `Z-2`, `Z-5` and
+`M-9` all carry forward unchanged. **`AA-2` and `AA-4` are NOT resolved: `AA-2` is named as newly on a
+second critical path and `AA-4` is NARROWED — and neither being named nor being narrowed is being
+answered.**
+
+**The decision's architectural half is reconciled here, and it reconciles cleanly: one pathway, no new
+entity, no amendment to §11, no amendment to AD-01K, and the `(CP × client × Project)` triple still not an
+anchor.** **Its commercial remainder — `AC-14` above all, restated at
+[§5.3](#53-ac-14-restated--the-question-this-decision-makes-acute) as the single question this decision
+makes acute, and `AC-25` beside it — is `BUSINESS DECISION REQUIRED` and is the Project Owner's alone.**
+Per Spec **Rule 1**: *do not invent requirements.* Per **§97**: *when in doubt, **STOP AND ASK**.* **This
+document is the asking.**

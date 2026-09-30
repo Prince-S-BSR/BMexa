@@ -1,11 +1,12 @@
 import { Suspense, type ReactNode } from "react";
-import { Building, SquareKanban, Users } from "lucide-react";
+import { Building, Network, SquareKanban, Users } from "lucide-react";
 import { NavLink } from "./nav-link";
 import { TenantSwitcher } from "./tenant-switcher";
 
 const nav = [
   { href: "/leads", label: "Customers", icon: Users },
   { href: "/pipeline", label: "Pipeline", icon: SquareKanban },
+  { href: "/org", label: "Organization", icon: Network },
   { href: "/admin/tenants", label: "Tenants", icon: Building, admin: true },
 ];
 
@@ -56,7 +57,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         <Suspense>
-          <ul className="grid grid-cols-3">
+          <ul className="grid grid-cols-4">
             {nav.map((item) => (
               <li key={item.href}>
                 <NavLink

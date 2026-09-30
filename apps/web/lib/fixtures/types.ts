@@ -22,20 +22,138 @@ export interface Tenant {
   trialEndsAt?: string;
 }
 
+/**
+ * `projects` is a deliberate minimal stub in the real schema (03ak §4.6):
+ * id, tenant, name, custom_attributes, timestamps. No status, no lifecycle.
+ * `locality` is a customer-screen display convenience that lives in
+ * `custom_attributes` territory; the Organization screens do not show it.
+ */
 export interface Project {
   id: string;
   tenantId: string;
   name: string;
   locality: string;
+  createdAt: string;
 }
 
-export type UserRole = "Sales Rep" | "Site Head" | "Project Head" | "Helpdesk";
+/**
+ * Legacy display label used by the customer screens ("Owner · Site Head").
+ * The Organization screens do NOT read this: project roles come from
+ * `ProjectRoleGrant` rows and tenant roles from `UserRoleGrant` rows.
+ */
+export type UserRole = "Sales Rep" | "Site Head" | "Project Head" | "Helpdesk" | "Management" | "Staff";
+
+/** Mirrors `users.status` (0000 §users CHECK). Access ends here; the employee row persists. */
+export type UserStatus = "invited" | "active" | "suspended" | "deactivated";
 
 export interface User {
   id: string;
   tenantId: string;
   name: string;
   role: UserRole;
+  /** `users.email` */
+  email: string;
+  /** `users.status` */
+  status: UserStatus;
+}
+
+// ---------------------------------------------------------------------------
+// Organization / Users (Phase 1). Field names mirror packages/db/schema.ts
+// column-for-column so a later real-API wiring is a data-source swap. The
+// `id`s are readable slugs instead of uuids; nothing else differs in shape.
+// ---------------------------------------------------------------------------
+
+/** R4 master shape shared by `departments` and `designations` (03ak §4.2). */
+export interface MasterRow {
+  id: string;
+  tenantId: string;
+  /** Stable machine key, never shown. */
+  code: string;
+  /** Tenant-renameable label. */
+  label: string;
+  description: string | null;
+  sortOrder: number;
+  /** Retirement, never deletion. */
+  isActive: boolean;
+  /** Seeded rows: renameable and deactivatable, not deletable. */
+  isSystem: boolean;
+}
+
+/** `departments` — Sales, CRM, Accounts, Marketing are seeded (AG-Q-3-n). */
+export type Department = MasterRow;
+/** `designations` — NOT seeded; each tenant creates its own (PO-AI1·7). Confers no authority. */
+export type Designation = MasterRow;
+
+/** `employees` — the organizational identity, 1:1 with a user (Spec §06). */
+export interface Employee {
+  id: string;
+  tenantId: string;
+  userId: string;
+  departmentId: string | null;
+  designationId: string | null;
+  /** DIRECT manager. Indirect managers are reached by walking this upward. NULL = top of a tree. */
+  reportsToEmployeeId: string | null;
+  createdAt: string;
+}
+
+export type RoleGrantScope = "tenant" | "project";
+
+/** `roles` (Phase 0, extended with `grantScope` in Phase 1). */
+export interface Role {
+  id: string;
+  tenantId: string;
+  key: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+  requiresTwoFactor: boolean;
+  grantScope: RoleGrantScope;
+}
+
+/** `permissions` — the fixed catalogue, `resource.action`. */
+export interface Permission {
+  id: string;
+  tenantId: string;
+  key: string;
+  resource: string;
+  action: string;
+}
+
+/** `role_permissions` */
+export interface RolePermission {
+  tenantId: string;
+  roleId: string;
+  permissionId: string;
+}
+
+/** `user_roles` — tenant-wide grants only (`roleGrantScope` is always 'tenant'). */
+export interface UserRoleGrant {
+  tenantId: string;
+  userId: string;
+  roleId: string;
+  grantedBy: string | null;
+  grantedAt: string;
+  roleGrantScope: "tenant";
+}
+
+/**
+ * `project_role_grants` — one row per (employee, project-scoped role, project).
+ * Append-only: revocation stamps `revokedAt`, the row is never deleted, and a
+ * re-grant is a new row. No cardinality constraint (AI-Q-2 is open): a project
+ * may have several Site Heads, several Project Heads, and one employee may
+ * hold both on the same project.
+ */
+export interface ProjectRoleGrant {
+  id: string;
+  tenantId: string;
+  employeeId: string;
+  roleId: string;
+  roleGrantScope: "project";
+  projectId: string;
+  grantedByUserId: string | null;
+  grantedAt: string;
+  revokedAt: string | null;
+  revokedByUserId: string | null;
 }
 
 /** Inquiry-level commercial status (PO-AE1·P.3, V-23, PO-AJ1·11). */

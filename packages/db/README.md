@@ -15,10 +15,42 @@ Drizzle ORM + Postgres wiring for the CRM monorepo.
   `breakpoints` is `false` because the copied SQL has no
   `--> statement-breakpoint` markers inserted (deliberately, to keep it
   byte-for-byte identical to the canonical file).
-- `schema.ts` — hand-written TypeScript table definitions for `tenants` and
-  `users` only, enough for a type-safe smoke-test query. The other ~18 tables
-  are typed incrementally in Phase 1 as each business object needs them — see
-  the comment at the top of `schema.ts`.
+- `drizzle/0001_session_lookup_function.sql` — hand-written (Phase 0 gate).
+- `drizzle/0002_phase1_keys.sql`, `drizzle/0003_phase1_org_users_audit_gate.sql`
+  — **generated** by `drizzle-kit generate` from `schema.ts` (Phase 1:
+  organization/users tables, per-project role grants, audit_events extensions).
+- `drizzle/0004_phase1_rls_force_triggers_seed_grants.sql` — created with
+  `drizzle-kit generate --custom`; holds only what the Drizzle DSL cannot
+  express (FORCE RLS, partition RLS, triggers, provisioning functions,
+  backfill, `crm_app` grants). Must run as a superuser/BYPASSRLS migration
+  role — its backfill refuses to run otherwise.
+- `drizzle/meta/0001_snapshot.json` — the **diff baseline**: the Phase 0
+  portion of `schema.ts`, generated once into a throwaway folder and committed
+  as migration 0001's snapshot, so drizzle-kit emits only deltas and never
+  re-CREATEs a Phase 0 table.
+- `schema.ts` — Drizzle table definitions. Phase 0 tables are typed where
+  Phase 1 references them (`tenants`, `users`, `roles`, `permissions`,
+  `role_permissions`, `user_roles`, `audit_events`), with constraint names
+  matching the live database; Phase 1 tables are defined in full. Design
+  record: `docs/architecture/03ak-phase1-organization-users-and-audit-completeness-gate-data-model.md`.
+
+## Generating a migration
+
+1. Edit `schema.ts`, then `npm run db:generate -- --name <what_changed>`.
+2. **If the change adds a UNIQUE constraint to an existing table AND a foreign
+   key that references it**, generate twice: first with only the UNIQUE (and
+   any new column it covers), then with the rest. drizzle-kit 0.30 emits FKs on
+   altered tables before UNIQUE constraints on altered tables, so a single run
+   produces SQL that fails to apply. Never hand-reorder generated SQL.
+3. Anything the DSL cannot express (FORCE RLS, triggers, functions, grants,
+   data backfills) goes in `npm run db:generate -- --custom --name <name>`.
+4. Every new table: declare the `tenant_isolation` policy in `schema.ts` (it
+   generates ENABLE RLS + CREATE POLICY) **and** add `FORCE ROW LEVEL
+   SECURITY` in a custom migration. `apps/api/test/schema-conformance.test.ts`
+   fails CI if either is missing.
+5. Apply with `psql -v ON_ERROR_STOP=1 -f <file>` as the migration role, in
+   journal order, and re-run `npm run db:generate` to confirm "No schema
+   changes".
 - `client.ts` — the Drizzle client and the `withTenantContext()` helper that
   implements the `SET LOCAL app.current_tenant_id` pattern from the
   architecture note §3.3. Not called from any route yet (Phase 0 has none).

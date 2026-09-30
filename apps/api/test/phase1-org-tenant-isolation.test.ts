@@ -284,7 +284,9 @@ describe("Phase 1 — organization schema: tenant isolation, reporting tree, per
     it("an employee cannot report to themselves (P1-O-2)", async () => {
       const err = await pgError(q(A.tenantId, sql`UPDATE employees SET reports_to_employee_id = id WHERE id = ${empD}`));
       expect(err.code).toBe("23514");
-      expect(err.constraint_name).toBe("employees_not_own_manager");
+      // Either guard may report it: the acyclicity trigger (BEFORE) walks one
+      // step and meets itself before the declarative CHECK is evaluated.
+      expect(["employees_not_own_manager", "employees_reporting_tree_acyclic"]).toContain(err.constraint_name);
     });
 
     it("a longer cycle is refused: the CEO cannot be made to report to someone in their own tree (P1-O-3)", async () => {

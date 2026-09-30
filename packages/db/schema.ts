@@ -237,7 +237,8 @@ export const userRoles = pgTable(
 // record (03ak §6 — the AGX-10 resolution; architect-derived mechanism, not
 // PO-specified). Presentation follows the chain: an event superseded by a
 // 'retraction' is shown as deleted, by a 'correction' as edited; the latest
-// supersession (recorded_at, then id) wins. Nothing is ever rewritten.
+// supersession (occurred_at, then recorded_at, then id) wins. Nothing is ever
+// rewritten.
 export const auditEvents = pgTable(
   "audit_events",
   {

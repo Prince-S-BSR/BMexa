@@ -13,6 +13,7 @@
 // Everything runs as crm_app through withTenantContext(); nothing bypasses
 // RLS.
 
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { withTenantContext } from "@crm/db";
@@ -101,7 +102,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
   describe("ACG-1 coverage and ACG-2 contents", () => {
     it("records structured before-and-after values and reads them back unchanged (P1-ACG-2a)", async () => {
       await inRolledBackTx(A.tenantId, async (tx) => {
-        const id = crypto.randomUUID();
+        const id = randomUUID();
         await tx.execute(insertOriginal(A.tenantId, id));
         const r = await rows(tx, sql`SELECT before_state, after_state FROM audit_events WHERE id = ${id}`);
         expect(r[0].before_state).toEqual({ reports_to: "old-manager" });
@@ -159,7 +160,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
   describe("ACG-3/ACG-4/ACG-6/ACG-7 — correction and retraction by supersession", () => {
     it("the Builder-Side Admin retracts an event: a new record is appended and the original row is untouched (P1-ACG-3a)", async () => {
       await inRolledBackTx(A.tenantId, async (tx) => {
-        const original = crypto.randomUUID();
+        const original = randomUUID();
         await tx.execute(insertOriginal(A.tenantId, original));
         const before = await rows(tx, sql`SELECT * FROM audit_events WHERE id = ${original}`);
 
@@ -175,7 +176,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
 
     it("presentation follows the chain: the latest supersession decides whether the original shows as edited or deleted (P1-ACG-3b)", async () => {
       await inRolledBackTx(A.tenantId, async (tx) => {
-        const original = crypto.randomUUID();
+        const original = randomUUID();
         await tx.execute(insertOriginal(A.tenantId, original));
         await tx.execute(
           supersede(A.tenantId, {
@@ -199,7 +200,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
 
     it("ACG-7: a supersession without a reason, or with a blank one, is refused (P1-ACG-7)", async () => {
       await inRolledBackTx(A.tenantId, async (tx) => {
-        const original = crypto.randomUUID();
+        const original = randomUUID();
         await tx.execute(insertOriginal(A.tenantId, original));
         const missing = await pgErrorInSavepoint(tx, supersede(A.tenantId, { target: original, kind: "retraction", actor: adminA, reason: null }));
         expect(missing.code).toBe("23514");
@@ -211,7 +212,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
 
     it("ACG-4: a user without audit.retract — even the tenant owner — cannot retract (P1-ACG-4a)", async () => {
       await inRolledBackTx(A.tenantId, async (tx) => {
-        const original = crypto.randomUUID();
+        const original = randomUUID();
         await tx.execute(insertOriginal(A.tenantId, original));
         const err = await pgErrorInSavepoint(tx, supersede(A.tenantId, { target: original, kind: "retraction", actor: ownerA }));
         expect(err.code).toBe("42501");
@@ -221,7 +222,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
 
     it("ACG-4: a suspended Builder-Side Admin cannot correct (P1-ACG-4b)", async () => {
       await inRolledBackTx(A.tenantId, async (tx) => {
-        const original = crypto.randomUUID();
+        const original = randomUUID();
         await tx.execute(insertOriginal(A.tenantId, original));
         await tx.execute(sql`UPDATE users SET status = 'suspended' WHERE id = ${adminA}`);
         const err = await pgErrorInSavepoint(
@@ -234,7 +235,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
 
     it("ACG-6: the edit/delete record must name its administrator — a system actor is refused (P1-ACG-6a)", async () => {
       await inRolledBackTx(A.tenantId, async (tx) => {
-        const original = crypto.randomUUID();
+        const original = randomUUID();
         await tx.execute(insertOriginal(A.tenantId, original));
         const err = await pgErrorInSavepoint(
           tx,
@@ -247,7 +248,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
 
     it("ACG-6: a correction must carry the corrected values (P1-ACG-6b)", async () => {
       await inRolledBackTx(A.tenantId, async (tx) => {
-        const original = crypto.randomUUID();
+        const original = randomUUID();
         await tx.execute(insertOriginal(A.tenantId, original));
         const err = await pgErrorInSavepoint(tx, supersede(A.tenantId, { target: original, kind: "correction", actor: adminA }));
         expect(err.constraint_name).toBe("audit_events_correction_has_after_state");
@@ -256,7 +257,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
 
     it("ACG-6: the edit/delete record is itself immutable — it cannot be retracted, even by the Builder-Side Admin (P1-ACG-6c)", async () => {
       await inRolledBackTx(A.tenantId, async (tx) => {
-        const original = crypto.randomUUID();
+        const original = randomUUID();
         await tx.execute(insertOriginal(A.tenantId, original));
         const meta = await rows(tx, supersede(A.tenantId, { target: original, kind: "retraction", actor: adminA }));
         const err = await pgErrorInSavepoint(
@@ -269,7 +270,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
     });
 
     it("a tenant A admin cannot supersede tenant B's event (P1-ACG-4c)", async () => {
-      const bEvent = crypto.randomUUID();
+      const bEvent = randomUUID();
       // Tenant B's event exists only inside this rolled-back transaction; the
       // context is switched in-transaction with set_config (SET LOCAL's
       // parameterisable form) so both halves share one rollback.
@@ -288,7 +289,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
   describe("R6 immutability, ACG-8 retention, and tenant isolation of audit rows", () => {
     it("crm_app can neither UPDATE nor DELETE an audit row (P1-ACG-R6)", async () => {
       await inRolledBackTx(A.tenantId, async (tx) => {
-        const id = crypto.randomUUID();
+        const id = randomUUID();
         await tx.execute(insertOriginal(A.tenantId, id));
         const u = await pgErrorInSavepoint(tx, sql`UPDATE audit_events SET event_type = 'rewritten' WHERE id = ${id}`);
         expect(u.code).toBe("42501");
@@ -299,7 +300,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
 
     it("ACG-8: a tenant with audit history cannot be deleted — no cascade path erases it (P1-ACG-8)", async () => {
       await inRolledBackTx(A.tenantId, async (tx) => {
-        await tx.execute(insertOriginal(A.tenantId, crypto.randomUUID()));
+        await tx.execute(insertOriginal(A.tenantId, randomUUID()));
         const err = await pgErrorInSavepoint(tx, sql`DELETE FROM tenants WHERE id = ${A.tenantId}`);
         expect(err.code).toBe("23503");
         expect(err.constraint_name).toBe("audit_events_tenant_id_fkey");
@@ -307,7 +308,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
     });
 
     it("tenant B cannot see tenant A's audit rows, and cannot write rows stamped as tenant A (P1-ACG-R1a)", async () => {
-      const aEvent = crypto.randomUUID();
+      const aEvent = randomUUID();
       await inRolledBackTx(A.tenantId, async (tx) => {
         await tx.execute(insertOriginal(A.tenantId, aEvent));
         await tx.execute(sql`SELECT set_config('app.current_tenant_id', ${B.tenantId}, true)`);
@@ -343,7 +344,7 @@ describe("Audit Completeness Gate — audit_events (ACG-1…ACG-9)", () => {
       // the probe insert and the context-free read share one rolled-back
       // transaction; clearing the GUC mid-transaction is the no-context case.
       await inRolledBackTx(A.tenantId, async (tx) => {
-        await tx.execute(insertOriginal(A.tenantId, crypto.randomUUID()));
+        await tx.execute(insertOriginal(A.tenantId, randomUUID()));
         await tx.execute(sql`SELECT set_config('app.current_tenant_id', '', true)`);
         const r = extractRows(await tx.execute(sql`SELECT count(*)::int AS n FROM audit_events`));
         expect(r[0].n).toBe(0);

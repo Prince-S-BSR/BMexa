@@ -1,5 +1,8 @@
 import { Suspense, type ReactNode } from "react";
 import { Building, Network, SquareKanban, Users } from "lucide-react";
+import Link from "next/link";
+import { hasSession } from "@/lib/session";
+import { LogoutButton } from "./logout-button";
 import { NavLink } from "./nav-link";
 import { TenantSwitcher } from "./tenant-switcher";
 
@@ -10,7 +13,14 @@ const nav = [
   { href: "/admin/tenants", label: "Tenants", icon: Building, admin: true },
 ];
 
-export function AppShell({ children }: { children: ReactNode }) {
+export async function AppShell({ children }: { children: ReactNode }) {
+  // AppShell still renders for every (app) route regardless of session state
+  // (route-level auth gating for these fixture-backed screens is step 5's
+  // job, Beads issue Final-Verison-224) — this only swaps the logout control
+  // for a login link so there's still a way back to /login from a
+  // logged-out visit (Beads issue Final-Verison-b1r, step 4/5).
+  const loggedIn = await hasSession();
+
   return (
     <div className="flex min-h-dvh flex-col">
       <a
@@ -43,6 +53,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Suspense fallback={<div className="h-8 w-40 rounded-md bg-surface-2" />}>
               <TenantSwitcher />
             </Suspense>
+            {loggedIn ? (
+              <LogoutButton />
+            ) : (
+              <Link
+                href="/login"
+                className="inline-flex h-8 items-center rounded-md px-2.5 text-sm font-medium text-fg-2 hover:bg-surface-2 hover:text-fg"
+              >
+                Log in
+              </Link>
+            )}
           </div>
         </div>
       </header>

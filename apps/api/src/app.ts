@@ -9,6 +9,7 @@
 
 import Fastify, { type FastifyInstance } from "fastify";
 import testOnlyRoutes from "./routes/test-only.js";
+import authRoutes from "./routes/auth.js";
 import employeeRoutes from "./routes/employees.js";
 import departmentRoutes from "./routes/departments.js";
 import designationRoutes from "./routes/designations.js";
@@ -39,6 +40,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   // routes proving R1/R2/R3 hold over real HTTP requests. Not product routes —
   // see apps/api/src/routes/test-only.ts for the scope boundary.
   await app.register(testOnlyRoutes);
+
+  // Phase 1 (Beads issue Final-Verison-r1r): signup — the previously-missing
+  // prerequisite for everything below (see routes/auth.ts header). No
+  // sessionContextPreHandler: there is no session yet.
+  await app.register(authRoutes);
 
   // Phase 1 (Beads issue Final-Verison-abf): the first real product routes —
   // Organization/Users CRUD and the Audit API. See docs/architecture/03ak-…

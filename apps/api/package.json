@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@crm/db": "*",
+    "argon2": "^0.45.1",
     "fastify": "^5.2.1"
   },
   "devDependencies": {

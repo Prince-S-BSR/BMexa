@@ -9,6 +9,13 @@
 
 import Fastify, { type FastifyInstance } from "fastify";
 import testOnlyRoutes from "./routes/test-only.js";
+import employeeRoutes from "./routes/employees.js";
+import departmentRoutes from "./routes/departments.js";
+import designationRoutes from "./routes/designations.js";
+import projectRoutes from "./routes/projects.js";
+import projectRoleGrantRoutes from "./routes/project-role-grants.js";
+import roleRoutes from "./routes/roles.js";
+import auditRoutes from "./routes/audit.js";
 
 export interface BuildAppOptions {
   /** Defaults to true to match index.ts's production behavior. Tests pass false to keep output quiet. */
@@ -32,6 +39,18 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   // routes proving R1/R2/R3 hold over real HTTP requests. Not product routes —
   // see apps/api/src/routes/test-only.ts for the scope boundary.
   await app.register(testOnlyRoutes);
+
+  // Phase 1 (Beads issue Final-Verison-abf): the first real product routes —
+  // Organization/Users CRUD and the Audit API. See docs/architecture/03ak-…
+  // for the data model and each route file's header for its permission
+  // mapping and audit-emission behavior.
+  await app.register(employeeRoutes);
+  await app.register(departmentRoutes);
+  await app.register(designationRoutes);
+  await app.register(projectRoutes);
+  await app.register(projectRoleGrantRoutes);
+  await app.register(roleRoutes);
+  await app.register(auditRoutes);
 
   return app;
 }

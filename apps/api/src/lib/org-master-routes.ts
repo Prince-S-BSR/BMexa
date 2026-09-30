@@ -19,7 +19,6 @@
 import type { FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
 import { withTenantContext } from "@crm/db";
-import { sessionContextPreHandler } from "../middleware/session-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import { extractRows } from "./rows.js";
 import { getActorLabel, recordAuditEvent } from "./audit.js";

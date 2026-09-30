@@ -367,14 +367,14 @@ async function supersede(request: FastifyRequest, reply: FastifyReply, opts: Sup
   } catch (err) {
     const message = (err as Error & { code?: string }).message;
     const pgCode = (err as { code?: string; cause?: { code?: string } }).code ?? (err as { cause?: { code?: string } }).cause?.code;
-    // ACG-4: the audit_events_supersession_guard trigger raises
-    // 'insufficient_privilege' when the actor lacks audit.correct/
-    // audit.retract at insert time — belt-and-suspenders alongside the
-    // requirePermission() check above, which already gates the route on the
-    // same two keys. A trigger rejection here would mean the caller's
-    // permission changed between the preHandler and the INSERT, or reflects
-    // a rule this file does not otherwise encode (e.g. actor not 'active').
-    if (pgCode === "insufficient_privilege") {
+    // ACG-4: the audit_events_supersession_guard trigger raises SQLSTATE
+    // 42501 (insufficient_privilege) when the actor lacks audit.correct/
+    // audit.retract at insert time, OR is not an active, non-deleted user —
+    // a check requirePermission() above does not itself make. Real
+    // belt-and-suspenders: this is reachable even after the preHandler
+    // passed (e.g. the actor was deactivated between the check and the
+    // INSERT), not merely a duplicate of it.
+    if (pgCode === "42501") {
       await reply.code(403).send({ error: "permission_denied", detail: message });
       return;
     }

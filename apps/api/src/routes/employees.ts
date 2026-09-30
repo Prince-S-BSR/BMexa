@@ -233,7 +233,7 @@ export default async function employeeRoutes(app: FastifyInstance): Promise<void
           if (!before) return null;
 
           await tx.execute(sql`
-            UPDATE users SET status = 'inactive' WHERE tenant_id = ${tenantId} AND id = ${before.userId}
+            UPDATE users SET status = 'deactivated' WHERE tenant_id = ${tenantId} AND id = ${before.userId}
           `);
 
           const afterResult = await tx.execute(sql`
@@ -254,7 +254,7 @@ export default async function employeeRoutes(app: FastifyInstance): Promise<void
             subjectType: "employee",
             subjectId: id,
             beforeState: { userStatus: before.status },
-            afterState: { userStatus: "inactive" },
+            afterState: { userStatus: "deactivated" },
           });
 
           return after;

@@ -208,7 +208,7 @@ function LogActivitySheet({ onClose, onDump, onSaved }: { onClose: () => void; o
           </button>
         </header>
 
-        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+        <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col">
           <div className="flex flex-col gap-4 overflow-y-auto px-4 py-4">
             <label className="flex flex-col gap-1.5">
               <span className={labelCls}>Communication type</span>

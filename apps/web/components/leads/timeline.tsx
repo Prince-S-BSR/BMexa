@@ -126,7 +126,7 @@ function SystemEntry({ e }: { e: SystemEvent }) {
         </div>
         {(e.detail || e.cycle) && (
           <p className="text-xs text-fg-3">
-            {isFR && e.cycle ? `${e.cycle} · derived from the activity above` : e.detail}
+            {isFR && e.cycle ? `${e.cycle} · derived from the activity below` : e.detail}
             {!isFR && e.cycle ? ` · ${e.cycle}` : ""}
           </p>
         )}

@@ -35,7 +35,7 @@ export function ViewAsToggle({
   };
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-fg-3">Viewing as</span>
+      <span className="shrink-0 whitespace-nowrap text-xs text-fg-3">Viewing as</span>
       <div className="inline-flex rounded-md bg-surface-2 p-0.5" role="group" aria-label="Viewing as">
         {item("handler", `${handlerName} · Sales Rep`, UserRound)}
         {item("site-head", `${siteHeadName} · Site Head`, Eye)}

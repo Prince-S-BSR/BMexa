@@ -1,12 +1,16 @@
-import { awaitingFirstResponse, lastEntry, NOW_ISO } from "@/lib/crm";
-import type { Customer } from "@/lib/fixtures/types";
+import { awaitingFirstResponse, NOW_ISO, visibleTimeline } from "@/lib/crm";
+import type { Customer, SystemEventType } from "@/lib/fixtures/types";
 import { formatRelative } from "@/lib/format";
 
 const outcomeLabel = { "FOLLOW-UP": "Follow-up", SUCCESS: "Success", DUMP: "Dump" } as const;
 
+/** Milestones derived from the activity beside them; the activity itself is the better summary. */
+const DERIVED: SystemEventType[] = ["FIRST_RESPONSE", "INTEREST_ADDED", "INTEREST_AGAIN"];
+
 /** One-line "last activity" summary used by the list and the pipeline. */
 export function ActivitySummary({ customer }: { customer: Customer }) {
-  const entry = lastEntry(customer, "handler");
+  const entries = visibleTimeline(customer, "handler");
+  const entry = [...entries].reverse().find((e) => e.kind === "activity" || !DERIVED.includes(e.type)) ?? null;
   if (!entry) return <span className="text-fg-3">No activity yet</span>;
 
   if (entry.kind === "activity") {

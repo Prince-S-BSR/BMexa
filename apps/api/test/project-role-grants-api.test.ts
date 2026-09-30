@@ -25,7 +25,6 @@ describe("Project Role Grants API (Final-Verison-abf)", () => {
   let tokenOwnerA: string; // owner — must NOT hold project_roles.manage by default (NI-20)
   let tokenBsaB: string;
   let projectA: string;
-  let projectA2: string;
   let employeeA1: string;
   let employeeA2: string;
   let siteHeadRoleIdA: string;
@@ -52,7 +51,6 @@ describe("Project Role Grants API (Final-Verison-abf)", () => {
     tokenBsaB = (await seedSession({ tenantId: tenantB.tenantId, userId: bsaBUserId })).token;
 
     projectA = await createProject(tenantA.tenantId, "Tower A");
-    projectA2 = await createProject(tenantA.tenantId, "Tower A2");
     employeeA1 = await createEmployee(tenantA.tenantId, await createUser(tenantA.tenantId, "emp-a1"));
     employeeA2 = await createEmployee(tenantA.tenantId, await createUser(tenantA.tenantId, "emp-a2"));
     siteHeadRoleIdA = await getRoleIdByKey(tenantA.tenantId, "site_head");

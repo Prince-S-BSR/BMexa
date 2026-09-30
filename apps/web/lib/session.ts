@@ -18,8 +18,30 @@
 // ever echoes back non-secret fields (tenant/user), never `token`.
 
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 export const SESSION_COOKIE_NAME = "bmexa_session";
+
+/**
+ * Non-secret companion cookie: the subdomain of the tenant the current
+ * session belongs to (Beads issue Final-Verison-224, step 5/5). apps/api has
+ * no endpoint that returns tenant identity after login — `POST /auth/login`
+ * replies with only `{ id, subdomain }` for `tenant` (no `name`; only the
+ * one-time `/auth/signup` response ever carries the tenant's display name,
+ * see api-client.ts's SignupResult) — so this is the only tenant-identifying
+ * value the Org/Users screens can reliably show in a header after a plain
+ * login, and it is not sensitive (it is already public in the URL the
+ * subdomain-based login form itself requires). See the step 5 final report
+ * for why this is a deliberate, flagged adaptation rather than a silent
+ * fixture-parity shortcut: the fixtures' `tenant.name` has no real-API
+ * equivalent once the founding signup response is gone.
+ */
+export const TENANT_COOKIE_NAME = "bmexa_tenant";
+
+interface TenantCookiePayload {
+  id: string;
+  subdomain: string;
+}
 
 /**
  * Sets the session cookie after a successful login (or a signup that chains
@@ -44,6 +66,40 @@ export async function setSessionCookie(token: string, expiresAt: string): Promis
 export async function clearSessionCookie(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE_NAME);
+  cookieStore.delete(TENANT_COOKIE_NAME);
+}
+
+/**
+ * Sets the companion tenant-identity cookie. Called from the same Route
+ * Handlers that call setSessionCookie (login and signup-that-chains-into-
+ * login) — same lifetime, same non-forgeable server-only write path. Not
+ * httpOnly: nothing in it is secret (see TENANT_COOKIE_NAME's comment), and
+ * a future client-side convenience (e.g. showing the subdomain in a tab
+ * title) can read it without a round trip, though nothing does today.
+ */
+export async function setTenantCookie(tenant: TenantCookiePayload, expiresAt: string): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(TENANT_COOKIE_NAME, JSON.stringify(tenant), {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    expires: new Date(expiresAt),
+  });
+}
+
+/** Reads back the tenant-identity cookie set at login/signup, if any. */
+export async function getSessionTenant(): Promise<TenantCookiePayload | null> {
+  const cookieStore = await cookies();
+  const raw = cookieStore.get(TENANT_COOKIE_NAME)?.value;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<TenantCookiePayload>;
+    if (typeof parsed.id !== "string" || typeof parsed.subdomain !== "string") return null;
+    return { id: parsed.id, subdomain: parsed.subdomain };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -85,4 +141,33 @@ export async function getSessionToken(): Promise<string | null> {
  */
 export async function hasSession(): Promise<boolean> {
   return (await getSessionToken()) !== null;
+}
+
+/**
+ * Real auth gate for a Server Component that needs a token to call apps/api
+ * (Beads issue Final-Verison-224, step 5/5). Redirects to /login and never
+ * returns if there is no session cookie; otherwise resolves with the bearer
+ * token the caller needed anyway.
+ *
+ * WHY THIS IS CALLED FROM EVERY PROTECTED PAGE, NOT JUST APP ROOT LAYOUT:
+ * node_modules/next/dist/docs/01-app/02-guides/authentication.md
+ * ("Layouts and auth checks") warns that a layout does not control whether
+ * the rest of the route renders — client-side transitions can reuse an
+ * already-rendered layout shell without re-running it, and a layout that
+ * hides/swaps `{children}` does not stop that segment's own rendering. Its
+ * recommendation is to do the real check "close to your data source" (here,
+ * every Server Component that is about to call apps/api). app/(app)/
+ * layout.tsx still calls hasSession() too, for the fast, no-network,
+ * whole-page-load UX case (redirect before AppShell's chrome even starts
+ * rendering) — this function is the belt-and-suspenders check that actually
+ * gates each page's protected data, the same "optimistic vs secure check"
+ * split the same doc draws between a layout/proxy check and a per-request
+ * one.
+ */
+export async function requireSession(): Promise<string> {
+  const token = await getSessionToken();
+  if (!token) {
+    redirect("/login");
+  }
+  return token;
 }

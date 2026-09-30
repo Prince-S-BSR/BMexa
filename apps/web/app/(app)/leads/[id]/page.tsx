@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge, BucketBadge } from "@/components/ui/badge";
 import { followUpBucket, getCustomer, getProject, getTenant, getUser, visibleTimeline, type Viewer } from "@/lib/crm";
 import { formatDate, formatDateTime, formatLakh } from "@/lib/format";
+import { requireSession } from "@/lib/session";
 
 export async function generateMetadata(props: PageProps<"/leads/[id]">): Promise<Metadata> {
   const { id } = await props.params;
@@ -16,6 +17,9 @@ export async function generateMetadata(props: PageProps<"/leads/[id]">): Promise
 }
 
 export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
+  // Auth gate only (Beads issue Final-Verison-224, step 5/5); this screen
+  // stays fixture-backed and otherwise untouched.
+  await requireSession();
   const { id } = await props.params;
   const sp = await props.searchParams;
   const customer = getCustomer(id);

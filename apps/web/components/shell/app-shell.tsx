@@ -14,11 +14,10 @@ const nav = [
 ];
 
 export async function AppShell({ children }: { children: ReactNode }) {
-  // AppShell still renders for every (app) route regardless of session state
-  // (route-level auth gating for these fixture-backed screens is step 5's
-  // job, Beads issue Final-Verison-224) — this only swaps the logout control
-  // for a login link so there's still a way back to /login from a
-  // logged-out visit (Beads issue Final-Verison-b1r, step 4/5).
+  // Session state also drives the logout/login link below (Beads issue
+  // Final-Verison-b1r, step 4/5). Route-level auth gating (redirecting a
+  // logged-out visitor away entirely) lives in app/(app)/layout.tsx and each
+  // page's requireSession() call, not here — Final-Verison-224, step 5/5.
   const loggedIn = await hasSession();
 
   return (

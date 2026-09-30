@@ -15,7 +15,7 @@
 
 import { NextResponse } from "next/server";
 import { ApiClientError, login, type LoginInput } from "@/lib/api-client";
-import { setSessionCookie } from "@/lib/session";
+import { setSessionCookie, setTenantCookie } from "@/lib/session";
 
 export async function POST(request: Request) {
   let body: Partial<LoginInput>;
@@ -33,6 +33,10 @@ export async function POST(request: Request) {
   try {
     const result = await login({ subdomain, email, password });
     await setSessionCookie(result.token, result.expiresAt);
+    // See lib/session.ts's TENANT_COOKIE_NAME comment: /auth/login's own
+    // response carries only { id, subdomain } for tenant, not a display
+    // name, so that is what this companion cookie stores too.
+    await setTenantCookie(result.tenant, result.expiresAt);
     return NextResponse.json({ tenant: result.tenant, user: result.user });
   } catch (err) {
     if (err instanceof ApiClientError) {

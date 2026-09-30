@@ -3,13 +3,10 @@ import Link from "next/link";
 import { UsersRound } from "lucide-react";
 import { EmployeeLink, employeeHref } from "@/components/org/employee-link";
 import { ProjectRoleBadge, UserStatusBadge } from "@/components/org/role-badges";
-import { resolveTenant } from "@/lib/crm";
-import type { Employee } from "@/lib/fixtures/types";
 import {
   departmentsForTenant,
   directManager,
   employeeName,
-  employeeUser,
   employeesForTenant,
   getDepartment,
   getDesignation,
@@ -17,7 +14,11 @@ import {
   getRole,
   isActive,
   liveGrantsForEmployee,
-} from "@/lib/org";
+  loadOrgSnapshot,
+  type OrgEmployee,
+  type OrgSnapshot,
+} from "@/lib/org-api";
+import { getSessionTenant, requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Employees" };
 
@@ -25,14 +26,14 @@ function first(v: string | string[] | undefined) {
   return Array.isArray(v) ? v[0] : v;
 }
 
-function ProjectRoleCell({ employee }: { employee: Employee }) {
-  const grants = liveGrantsForEmployee(employee.id);
+function ProjectRoleCell({ snapshot, employee }: { snapshot: OrgSnapshot; employee: OrgEmployee }) {
+  const grants = liveGrantsForEmployee(snapshot, employee.id);
   if (grants.length === 0) return <span className="text-fg-3">—</span>;
   return (
     <span className="flex flex-wrap gap-1">
       {grants.map((g) => {
-        const role = getRole(g.roleId)!;
-        const project = getProject(g.projectId)!;
+        const role = getRole(snapshot, g.roleId)!;
+        const project = getProject(snapshot, g.projectId)!;
         return (
           <span key={g.id} className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-fg-2">
             <ProjectRoleBadge role={role} compact />
@@ -45,26 +46,30 @@ function ProjectRoleCell({ employee }: { employee: Employee }) {
 }
 
 export default async function EmployeesPage(props: PageProps<"/org/employees">) {
+  const token = await requireSession();
   const sp = await props.searchParams;
-  const tenant = resolveTenant(sp.tenant);
   const deptFilter = first(sp.dept);
   const showInactive = first(sp.inactive) === "1";
 
-  const all = employeesForTenant(tenant.id);
-  const depts = departmentsForTenant(tenant.id);
+  const [snapshot, tenant] = await Promise.all([loadOrgSnapshot(token), getSessionTenant()]);
+  const tenantLabel = tenant?.subdomain ?? "your organization";
+
+  const all = employeesForTenant(snapshot);
+  const depts = departmentsForTenant(snapshot);
   const inactiveCount = all.filter((e) => !isActive(e)).length;
 
   const visible = all
     .filter((e) => (showInactive ? true : isActive(e)))
-    .filter((e) => (deptFilter ? e.departmentId === `dept-${tenant.id}-${deptFilter}` : true));
+    .filter((e) => (deptFilter ? e.departmentId === depts.find((d) => d.code === deptFilter)?.id : true));
 
   const link = (next: { dept?: string; inactive?: boolean }) => {
-    const q = new URLSearchParams({ tenant: tenant.id });
+    const q = new URLSearchParams();
     const d = "dept" in next ? next.dept : deptFilter;
     const i = "inactive" in next ? next.inactive : showInactive;
     if (d) q.set("dept", d);
     if (i) q.set("inactive", "1");
-    return `/org/employees?${q.toString()}`;
+    const qs = q.toString();
+    return `/org/employees${qs ? `?${qs}` : ""}`;
   };
 
   const chip = (active: boolean) =>
@@ -81,7 +86,7 @@ export default async function EmployeesPage(props: PageProps<"/org/employees">) 
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Employees</h1>
           <p className="text-sm text-fg-2">
-            {tenant.name} · <span className="tabular">{visible.length}</span> of <span className="tabular">{all.length}</span> records
+            {tenantLabel} · <span className="tabular">{visible.length}</span> of <span className="tabular">{all.length}</span> records
           </p>
         </div>
         <Link href={link({ inactive: !showInactive })} className="text-sm font-medium text-accent hover:underline" aria-pressed={showInactive}>
@@ -110,7 +115,7 @@ export default async function EmployeesPage(props: PageProps<"/org/employees">) 
           <UsersRound aria-hidden="true" className="size-8 text-fg-3" strokeWidth={1.5} />
           <p className="font-medium">No employees in this view</p>
           <p className="max-w-xs text-sm text-fg-2">
-            Nobody {showInactive ? "" : "active "}is assigned to this department at {tenant.name}.
+            Nobody {showInactive ? "" : "active "}is assigned to this department.
           </p>
           <Link href={link({ dept: undefined })} className="mt-2 text-sm font-medium text-accent hover:underline">
             Clear filter
@@ -132,20 +137,25 @@ export default async function EmployeesPage(props: PageProps<"/org/employees">) 
               </thead>
               <tbody>
                 {visible.map((e) => {
-                  const user = employeeUser(e);
-                  const manager = directManager(e);
+                  const manager = directManager(snapshot, e);
                   const active = isActive(e);
                   return (
                     <tr key={e.id} className={`border-b border-border last:border-b-0 hover:bg-surface-2/60 ${active ? "" : "text-fg-2"}`}>
                       <td className="px-4 py-3 align-top">
-                        <EmployeeLink employee={e} subtitle="none" muted={!active} />
-                        <span className="mt-0.5 block truncate pl-9.5 text-xs text-fg-3">{user.email}</span>
+                        <EmployeeLink
+                          employeeId={e.id}
+                          name={employeeName(e)}
+                          designation={getDesignation(snapshot, e.designationId)?.label}
+                          subtitle="none"
+                          muted={!active}
+                        />
+                        <span className="mt-0.5 block truncate pl-9.5 text-xs text-fg-3">{e.userEmail}</span>
                       </td>
-                      <td className="px-4 py-3 align-top whitespace-nowrap">{getDesignation(e.designationId)?.label ?? <span className="text-fg-3">—</span>}</td>
-                      <td className="px-4 py-3 align-top whitespace-nowrap">{getDepartment(e.departmentId)?.label ?? <span className="text-fg-3">—</span>}</td>
+                      <td className="px-4 py-3 align-top whitespace-nowrap">{getDesignation(snapshot, e.designationId)?.label ?? <span className="text-fg-3">—</span>}</td>
+                      <td className="px-4 py-3 align-top whitespace-nowrap">{getDepartment(snapshot, e.departmentId)?.label ?? <span className="text-fg-3">—</span>}</td>
                       <td className="px-4 py-3 align-top whitespace-nowrap">
                         {manager ? (
-                          <Link href={employeeHref(manager)} className="hover:underline">
+                          <Link href={employeeHref(manager.id)} className="hover:underline">
                             {employeeName(manager)}
                           </Link>
                         ) : (
@@ -153,10 +163,10 @@ export default async function EmployeesPage(props: PageProps<"/org/employees">) 
                         )}
                       </td>
                       <td className="max-w-72 px-4 py-3 align-top">
-                        <ProjectRoleCell employee={e} />
+                        <ProjectRoleCell snapshot={snapshot} employee={e} />
                       </td>
                       <td className="px-4 py-3 align-top">
-                        <UserStatusBadge status={user.status} />
+                        <UserStatusBadge status={e.userStatus} />
                       </td>
                     </tr>
                   );
@@ -167,27 +177,31 @@ export default async function EmployeesPage(props: PageProps<"/org/employees">) 
 
           <ul className="flex flex-col gap-2 md:hidden">
             {visible.map((e) => {
-              const user = employeeUser(e);
-              const manager = directManager(e);
+              const manager = directManager(snapshot, e);
               return (
                 <li key={e.id} className="card p-3.5">
                   <div className="flex items-start justify-between gap-3">
-                    <EmployeeLink employee={e} muted={!isActive(e)} />
-                    <UserStatusBadge status={user.status} />
+                    <EmployeeLink
+                      employeeId={e.id}
+                      name={employeeName(e)}
+                      designation={getDesignation(snapshot, e.designationId)?.label}
+                      muted={!isActive(e)}
+                    />
+                    <UserStatusBadge status={e.userStatus} />
                   </div>
                   <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-xs">
                     <div>
                       <dt className="text-fg-3">Department</dt>
-                      <dd className="font-medium">{getDepartment(e.departmentId)?.label ?? "—"}</dd>
+                      <dd className="font-medium">{getDepartment(snapshot, e.departmentId)?.label ?? "—"}</dd>
                     </div>
                     <div>
                       <dt className="text-fg-3">Direct manager</dt>
                       <dd className="font-medium">{manager ? employeeName(manager) : "Top of tree"}</dd>
                     </div>
                   </dl>
-                  {liveGrantsForEmployee(e.id).length > 0 && (
+                  {liveGrantsForEmployee(snapshot, e.id).length > 0 && (
                     <div className="mt-2.5">
-                      <ProjectRoleCell employee={e} />
+                      <ProjectRoleCell snapshot={snapshot} employee={e} />
                     </div>
                   )}
                 </li>
@@ -198,7 +212,8 @@ export default async function EmployeesPage(props: PageProps<"/org/employees">) 
       )}
 
       <p className="text-xs text-fg-3">
-        Site Head and Project Head are per-project role grants, not designations. A designation confers no authority.
+        Site Head and Project Head are per-project role grants, not designations. A designation confers no authority. Names shown are the
+        employee&rsquo;s login email — the API does not yet return a display name (see the step 5 report).
       </p>
     </div>
   );

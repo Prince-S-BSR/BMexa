@@ -3,17 +3,19 @@ import Link from "next/link";
 import { FolderKanban } from "lucide-react";
 import { employeeHref } from "@/components/org/employee-link";
 import { ProjectRoleBadge } from "@/components/org/role-badges";
-import { resolveTenant } from "@/lib/crm";
 import { formatDate } from "@/lib/format";
-import { employeeName, getEmployee, liveGrantsForProject, projectRolesForTenant, projectsForTenant } from "@/lib/org";
+import { employeeName, getEmployee, liveGrantsForProject, loadOrgSnapshot, projectRolesForTenant, projectsForTenant } from "@/lib/org-api";
+import { getSessionTenant, requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Projects" };
 
-export default async function ProjectsPage(props: PageProps<"/org/projects">) {
-  const sp = await props.searchParams;
-  const tenant = resolveTenant(sp.tenant);
-  const projectList = projectsForTenant(tenant.id);
-  const projectRoles = projectRolesForTenant(tenant.id);
+export default async function ProjectsPage() {
+  const token = await requireSession();
+  const [snapshot, tenant] = await Promise.all([loadOrgSnapshot(token), getSessionTenant()]);
+  const tenantLabel = tenant?.subdomain ?? "your organization";
+
+  const projectList = projectsForTenant(snapshot);
+  const projectRoles = projectRolesForTenant(snapshot);
 
   return (
     <div className="flex flex-col gap-4">
@@ -21,10 +23,10 @@ export default async function ProjectsPage(props: PageProps<"/org/projects">) {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
           <p className="text-sm text-fg-2">
-            {tenant.name} · <span className="tabular">{projectList.length}</span> {projectList.length === 1 ? "project" : "projects"}
+            {tenantLabel} · <span className="tabular">{projectList.length}</span> {projectList.length === 1 ? "project" : "projects"}
           </p>
         </div>
-        <Link href={`/org/project-roles?tenant=${tenant.id}`} className="text-sm font-medium text-accent hover:underline">
+        <Link href="/org/project-roles" className="text-sm font-medium text-accent hover:underline">
           Role grants grid
         </Link>
       </header>
@@ -33,7 +35,7 @@ export default async function ProjectsPage(props: PageProps<"/org/projects">) {
         <div className="card flex flex-col items-center gap-2 px-6 py-14 text-center">
           <FolderKanban aria-hidden="true" className="size-8 text-fg-3" strokeWidth={1.5} />
           <p className="font-medium">No projects yet</p>
-          <p className="max-w-xs text-sm text-fg-2">{tenant.name} has not added a project.</p>
+          <p className="max-w-xs text-sm text-fg-2">{tenantLabel} has not added a project.</p>
         </div>
       ) : (
         <>
@@ -48,7 +50,7 @@ export default async function ProjectsPage(props: PageProps<"/org/projects">) {
               </thead>
               <tbody>
                 {projectList.map((p) => {
-                  const here = liveGrantsForProject(p.id);
+                  const here = liveGrantsForProject(snapshot, p.id);
                   return (
                     <tr key={p.id} className="border-b border-border last:border-b-0 hover:bg-surface-2/60">
                       <td className="px-4 py-3 align-top font-medium">{p.name}</td>
@@ -59,7 +61,7 @@ export default async function ProjectsPage(props: PageProps<"/org/projects">) {
                         ) : (
                           <ul className="flex flex-wrap gap-x-4 gap-y-1">
                             {projectRoles.map((r) => {
-                              const holders = here.filter((g) => g.roleId === r.id).map((g) => getEmployee(g.employeeId)!);
+                              const holders = here.filter((g) => g.roleId === r.id).map((g) => getEmployee(snapshot, g.employeeId)!);
                               if (holders.length === 0) return null;
                               return (
                                 <li key={r.id} className="flex items-center gap-1.5">
@@ -68,7 +70,7 @@ export default async function ProjectsPage(props: PageProps<"/org/projects">) {
                                     {holders.map((h, i) => (
                                       <span key={h.id}>
                                         {i > 0 && ", "}
-                                        <Link href={employeeHref(h)} className="hover:underline">
+                                        <Link href={employeeHref(h.id)} className="hover:underline">
                                           {employeeName(h)}
                                         </Link>
                                       </span>
@@ -89,7 +91,7 @@ export default async function ProjectsPage(props: PageProps<"/org/projects">) {
 
           <ul className="flex flex-col gap-2 md:hidden">
             {projectList.map((p) => {
-              const here = liveGrantsForProject(p.id);
+              const here = liveGrantsForProject(snapshot, p.id);
               return (
                 <li key={p.id} className="card p-3.5">
                   <p className="font-semibold">{p.name}</p>
@@ -97,7 +99,7 @@ export default async function ProjectsPage(props: PageProps<"/org/projects">) {
                   <ul className="mt-2.5 flex flex-col gap-1 border-t border-border pt-2.5 text-sm">
                     {here.length === 0 && <li className="text-fg-3">Nobody holds a role here</li>}
                     {projectRoles.map((r) => {
-                      const holders = here.filter((g) => g.roleId === r.id).map((g) => getEmployee(g.employeeId)!);
+                      const holders = here.filter((g) => g.roleId === r.id).map((g) => getEmployee(snapshot, g.employeeId)!);
                       if (holders.length === 0) return null;
                       return (
                         <li key={r.id} className="flex items-center gap-1.5">

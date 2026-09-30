@@ -4,6 +4,7 @@ import { Inbox } from "lucide-react";
 import { CustomerCards, CustomerTable } from "@/components/leads/customer-list";
 import { customersForTenant, followUpBucket, resolveTenant, STATUS_ORDER, type FollowUpBucket } from "@/lib/crm";
 import type { InquiryStatus } from "@/lib/fixtures/types";
+import { requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Customers" };
 
@@ -14,6 +15,10 @@ function first(v: string | string[] | undefined) {
 }
 
 export default async function LeadsPage(props: PageProps<"/leads">) {
+  // Auth gate only (Beads issue Final-Verison-224, step 5/5) — this screen
+  // is still fixture-backed (Phase 3 CRM backend does not exist yet) and is
+  // otherwise untouched. See lib/session.ts's requireSession() comment.
+  await requireSession();
   const sp = await props.searchParams;
   const tenant = resolveTenant(sp.tenant);
   const bucketFilter = first(sp.bucket) as FollowUpBucket | undefined;

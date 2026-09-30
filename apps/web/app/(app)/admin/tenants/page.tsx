@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { customersForTenant, tenants } from "@/lib/crm";
 import type { TenantStatus } from "@/lib/fixtures/types";
 import { formatDate } from "@/lib/format";
+import { requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Builder tenants" };
 
@@ -14,7 +15,10 @@ const statusTone: Record<TenantStatus, "success" | "info" | "warn" | "danger"> =
   Suspended: "danger",
 };
 
-export default function TenantsPage() {
+export default async function TenantsPage() {
+  // Auth gate only (Beads issue Final-Verison-224, step 5/5); this screen
+  // stays fixture-backed and otherwise untouched.
+  await requireSession();
   return (
     <div className="flex flex-col gap-4">
       <header>

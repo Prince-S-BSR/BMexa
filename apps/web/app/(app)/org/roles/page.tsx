@@ -2,59 +2,76 @@ import type { Metadata } from "next";
 import { Check, ShieldCheck } from "lucide-react";
 import { ScopeBadge } from "@/components/org/role-badges";
 import { Badge } from "@/components/ui/badge";
-import { resolveTenant } from "@/lib/crm";
-import type { Role } from "@/lib/fixtures/types";
-import { permissionsForRole, permissionsForTenant, roleHasPermission, rolesForTenant, usersWithRole, grantsForTenant, isLiveGrant } from "@/lib/org";
+import {
+  grantsForTenant,
+  isLiveGrant,
+  loadOrgSnapshot,
+  permissionsForRole,
+  permissionsForTenant,
+  roleHasPermission,
+  rolesForTenant,
+  type OrgRole,
+} from "@/lib/org-api";
+import { getSessionTenant, requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Roles & permissions" };
 
 /** Presentation order: the audit authority first, then the rest of the tenant roles, then the per-project roles. */
 const ORDER = ["builder_side_admin", "owner", "admin", "manager", "member", "read_only", "site_head", "project_head"];
 
-function holdersLabel(role: Role): string {
-  if (role.grantScope === "project") {
-    const n = new Set(
-      grantsForTenant(role.tenantId)
-        .filter((g) => g.roleId === role.id && isLiveGrant(g))
-        .map((g) => g.employeeId),
-    ).size;
-    return `${n} ${n === 1 ? "holder" : "holders"}`;
-  }
-  const n = usersWithRole(role.id).length;
-  return `${n} ${n === 1 ? "user" : "users"}`;
-}
+export default async function RolesPage() {
+  const token = await requireSession();
+  const [snapshot, tenant] = await Promise.all([loadOrgSnapshot(token), getSessionTenant()]);
+  const tenantLabel = tenant?.subdomain ?? "your organization";
 
-export default async function RolesPage(props: PageProps<"/org/roles">) {
-  const sp = await props.searchParams;
-  const tenant = resolveTenant(sp.tenant);
-
-  const roleList = rolesForTenant(tenant.id).sort((a, b) => {
+  const roleList = rolesForTenant(snapshot).sort((a, b) => {
     const ia = ORDER.indexOf(a.key);
     const ib = ORDER.indexOf(b.key);
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.name.localeCompare(b.name);
   });
-  const permissionList = permissionsForTenant(tenant.id);
+  const permissionList = permissionsForTenant(snapshot);
   const resources = [...new Set(permissionList.map((p) => p.resource))];
 
   const audit = roleList.find((r) => r.key === "builder_side_admin");
   const auditPerms = permissionList.filter((p) => p.resource === "audit");
   const auditRoles = auditPerms.length
-    ? roleList.filter((r) => auditPerms.every((p) => roleHasPermission(r.id, p.id)))
+    ? roleList.filter((r) => auditPerms.every((p) => roleHasPermission(r, p.key)))
     : [];
+
+  /**
+   * Holder count. Project-scoped roles (Site Head/Project Head) are real —
+   * derived from project_role_grants, a real, filterable API. Tenant-scoped
+   * roles (owner/admin/manager/member/read_only/builder_side_admin) are NOT:
+   * apps/api has no endpoint listing a tenant's user_roles rows, so there is
+   * no way to count how many users hold a given tenant-wide role (see
+   * lib/org-api.ts's file header, gap #2). Rather than show a fabricated or
+   * silently-wrong "0 users", this is surfaced honestly.
+   */
+  function holdersLabel(role: OrgRole): string {
+    if (role.grantScope === "project") {
+      const n = new Set(
+        grantsForTenant(snapshot)
+          .filter((g) => g.roleId === role.id && isLiveGrant(g))
+          .map((g) => g.employeeId),
+      ).size;
+      return `${n} ${n === 1 ? "holder" : "holders"}`;
+    }
+    return "holders not available";
+  }
 
   return (
     <div className="flex flex-col gap-5">
       <header>
         <h1 className="text-xl font-semibold tracking-tight">Roles &amp; permissions</h1>
         <p className="text-sm text-fg-2">
-          {tenant.name} · <span className="tabular">{roleList.length}</span> roles · <span className="tabular">{permissionList.length}</span> permissions
+          {tenantLabel} · <span className="tabular">{roleList.length}</span> roles · <span className="tabular">{permissionList.length}</span> permissions
         </p>
       </header>
 
       {/* Role summary cards: scope, 2FA, holders, permission count. */}
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {roleList.map((r) => {
-          const n = permissionsForRole(r.id).length;
+          const n = permissionsForRole(snapshot, r).length;
           const isAudit = r.key === "builder_side_admin";
           const isProject = r.grantScope === "project";
           return (
@@ -125,13 +142,17 @@ export default async function RolesPage(props: PageProps<"/org/roles">) {
             <span className="font-medium text-fg-2">Site Head and Project Head.</span> Granted per project, not tenant-wide, and currently hold no permissions.
             The acts they will authorise (holds, cancellations, resale release, approval exceptions) do not exist yet; their permissions are added with those acts.
           </p>
+          <p>
+            <span className="font-medium text-fg-2">Holder counts.</span> Real for Site Head/Project Head (from project role grants). Not available for
+            tenant-wide roles — the current API has no endpoint listing who holds a tenant-wide role (see the step 5 report).
+          </p>
         </div>
       </section>
     </div>
   );
 }
 
-function RowGroup({ resource, roles, permissions }: { resource: string; roles: Role[]; permissions: { id: string; key: string; action: string }[] }) {
+function RowGroup({ resource, roles, permissions }: { resource: string; roles: OrgRole[]; permissions: { id: string; key: string; action: string }[] }) {
   const isAudit = resource === "audit";
   return (
     <>
@@ -153,7 +174,7 @@ function RowGroup({ resource, roles, permissions }: { resource: string; roles: R
             <span className="font-mono text-xs text-fg-2">{p.key}</span>
           </th>
           {roles.map((r) => {
-            const has = roleHasPermission(r.id, p.id);
+            const has = roleHasPermission(r, p.key);
             return (
               <td key={r.id} className={`px-2 py-2 text-center ${r.grantScope === "project" ? "bg-surface-2/30" : ""}`}>
                 {has ? (

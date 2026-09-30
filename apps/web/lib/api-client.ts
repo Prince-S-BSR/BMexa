@@ -69,7 +69,19 @@ export async function apiFetch<T>(path: string, init: ApiRequestInit = {}): Prom
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
     headers: {
-      "Content-Type": "application/json",
+      // Only set when there IS a body: apps/api's routes are plain Fastify
+      // JSON-body routes (e.g. employees.ts's /:id/deactivate,
+      // project-role-grants.ts's /:id/revoke) with no body of their own, and
+      // Fastify's default JSON content-type parser rejects an
+      // `application/json` request whose body is empty
+      // (`FST_ERR_CTP_EMPTY_JSON_BODY`) — found while wiring
+      // deactivateEmployee/revokeProjectRoleGrant for Beads issue
+      // Final-Verison-224, step 5/5; verified against the real running
+      // apps/api. This bug predates this step (every step-3 caller —
+      // signup/login — always sent a body, so it never surfaced) but every
+      // no-body POST added in this step needed it fixed here, at the one
+      // shared wrapper, rather than worked around per call site.
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
@@ -141,4 +153,250 @@ export interface LoginResult {
  */
 export function login(input: LoginInput): Promise<LoginResult> {
   return apiFetch<LoginResult>("/auth/login", { method: "POST", body: input });
+}
+
+// ---------------------------------------------------------------------------
+// Organization/Users resources (Beads issue Final-Verison-224, step 5/5).
+// Shapes below are copied verbatim from each route file's own SELECT/
+// RETURNING column list — apps/api/src/routes/{employees,departments,
+// designations,projects,project-role-grants,roles}.ts — the same way the
+// auth shapes above were copied from auth.ts. Every call here requires a
+// bearer token (`token` on ApiRequestInit): apps/api's
+// sessionContextPreHandler rejects with 401 without one, and every route
+// below also requires a specific permission (requirePermission(...) in the
+// route file) that the caller's tenant-wide roles must carry, or apps/api
+// replies 403 `permission_denied`.
+//
+// tenantId is deliberately NOT a parameter anywhere in this section: every
+// route below resolves it itself from the bearer token
+// (session-context.ts) and scopes every query to it. There is no
+// multi-tenant "?tenant=" switch for real data the way the CRM fixtures'
+// lib/crm.ts `resolveTenant()` has for fixtures/tenants.ts — the fixtures'
+// own TenantSwitcher component already says as much ("Mock tenant context.
+// In the real product the tenant comes from the session").
+
+/** `users.status` — verbatim from apps/api's employees.ts `userStatus` column. */
+export type UserStatus = "invited" | "active" | "suspended" | "deactivated";
+
+/** GET/POST/PATCH `/employees` row shape, exactly as employees.ts's `EMPLOYEE_COLUMNS` + join returns it. */
+export interface ApiEmployee {
+  id: string;
+  tenantId: string;
+  userId: string;
+  departmentId: string | null;
+  designationId: string | null;
+  reportsToEmployeeId: string | null;
+  customAttributes: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  /**
+   * The employee's user's email and status, joined in by employees.ts. NOTE:
+   * this is the only user-identifying field GET /employees and
+   * GET /employees/:id return — `users.full_name` is never selected by
+   * either route, even though the column exists and signup populates it.
+   * There is also no `/users` listing endpoint at all. See the step 5 final
+   * report: this is a genuine, unavoidable API gap (not something this
+   * frontend-wiring task should quietly work around by adding a backend
+   * endpoint), and the Org/Users screens fall back to this email wherever
+   * the fixtures showed a person's name.
+   */
+  userEmail: string;
+  userStatus: UserStatus;
+}
+
+export interface EmployeeCreateInput {
+  userId: string;
+  departmentId?: string | null;
+  designationId?: string | null;
+  reportsToEmployeeId?: string | null;
+  customAttributes?: Record<string, unknown>;
+}
+
+export interface EmployeeUpdateInput {
+  departmentId?: string | null;
+  designationId?: string | null;
+  reportsToEmployeeId?: string | null;
+  customAttributes?: Record<string, unknown>;
+}
+
+export function listEmployees(token: string): Promise<{ employees: ApiEmployee[] }> {
+  return apiFetch<{ employees: ApiEmployee[] }>("/employees", { token });
+}
+export function getEmployee(id: string, token: string): Promise<{ employee: ApiEmployee }> {
+  return apiFetch<{ employee: ApiEmployee }>(`/employees/${id}`, { token });
+}
+export function createEmployee(input: EmployeeCreateInput, token: string): Promise<{ employee: ApiEmployee }> {
+  return apiFetch<{ employee: ApiEmployee }>("/employees", { method: "POST", body: input, token });
+}
+export function updateEmployee(id: string, input: EmployeeUpdateInput, token: string): Promise<{ employee: ApiEmployee }> {
+  return apiFetch<{ employee: ApiEmployee }>(`/employees/${id}`, { method: "PATCH", body: input, token });
+}
+export function deactivateEmployee(id: string, token: string): Promise<{ employee: ApiEmployee }> {
+  return apiFetch<{ employee: ApiEmployee }>(`/employees/${id}/deactivate`, { method: "POST", token });
+}
+
+/** Shared R4 master shape — verbatim from `registerOrgMasterRoutes` (departments AND designations). */
+export interface ApiMasterRow {
+  id: string;
+  tenantId: string;
+  code: string;
+  label: string;
+  description: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  isSystem: boolean;
+  customAttributes: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MasterCreateInput {
+  code: string;
+  label: string;
+  description?: string | null;
+  sortOrder?: number;
+  customAttributes?: Record<string, unknown>;
+}
+
+export function listDepartments(token: string): Promise<{ departments: ApiMasterRow[] }> {
+  return apiFetch<{ departments: ApiMasterRow[] }>("/departments", { token });
+}
+export function createDepartment(input: MasterCreateInput, token: string): Promise<{ department: ApiMasterRow }> {
+  return apiFetch<{ department: ApiMasterRow }>("/departments", { method: "POST", body: input, token });
+}
+export function listDesignations(token: string): Promise<{ designations: ApiMasterRow[] }> {
+  return apiFetch<{ designations: ApiMasterRow[] }>("/designations", { token });
+}
+export function createDesignation(input: MasterCreateInput, token: string): Promise<{ designation: ApiMasterRow }> {
+  return apiFetch<{ designation: ApiMasterRow }>("/designations", { method: "POST", body: input, token });
+}
+
+/**
+ * GET/POST/PATCH `/projects` row shape (projects.ts `PROJECT_COLUMNS`). Note:
+ * no `locality` field — the real `projects` table is the deliberate minimal
+ * stub projects.ts's header describes (id, tenant, name, custom_attributes,
+ * timestamps only). The fixtures' `Project.locality` was, per its own doc
+ * comment in fixtures/types.ts, "a customer-screen display convenience" the
+ * Organization screens never rendered anyway, so this is not a UI-visible
+ * gap for the 5 screens this step wires up.
+ */
+export interface ApiProject {
+  id: string;
+  tenantId: string;
+  name: string;
+  customAttributes: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectCreateInput {
+  name: string;
+  customAttributes?: Record<string, unknown>;
+}
+
+export function listProjects(token: string): Promise<{ projects: ApiProject[] }> {
+  return apiFetch<{ projects: ApiProject[] }>("/projects", { token });
+}
+export function getProject(id: string, token: string): Promise<{ project: ApiProject }> {
+  return apiFetch<{ project: ApiProject }>(`/projects/${id}`, { token });
+}
+export function createProject(input: ProjectCreateInput, token: string): Promise<{ project: ApiProject }> {
+  return apiFetch<{ project: ApiProject }>("/projects", { method: "POST", body: input, token });
+}
+export function updateProject(id: string, name: string, token: string): Promise<{ project: ApiProject }> {
+  return apiFetch<{ project: ApiProject }>(`/projects/${id}`, { method: "PATCH", body: { name }, token });
+}
+
+/** `/project-role-grants` row shape (project-role-grants.ts `GRANT_COLUMNS`). Append-only: no PATCH, revoke is its own route. */
+export interface ApiProjectRoleGrant {
+  id: string;
+  tenantId: string;
+  employeeId: string;
+  roleId: string;
+  projectId: string;
+  grantedByUserId: string | null;
+  grantedAt: string;
+  revokedAt: string | null;
+  revokedByUserId: string | null;
+}
+
+export interface ProjectRoleGrantCreateInput {
+  employeeId: string;
+  roleId: string;
+  projectId: string;
+}
+
+export interface ListProjectRoleGrantsOptions {
+  projectId?: string;
+  employeeId?: string;
+  /** Mirrors project-role-grants.ts's `includeRevoked` query param — defaults to live-only, same as the route. */
+  includeRevoked?: boolean;
+}
+
+export function listProjectRoleGrants(
+  token: string,
+  opts: ListProjectRoleGrantsOptions = {},
+): Promise<{ projectRoleGrants: ApiProjectRoleGrant[] }> {
+  const q = new URLSearchParams();
+  if (opts.projectId) q.set("projectId", opts.projectId);
+  if (opts.employeeId) q.set("employeeId", opts.employeeId);
+  if (opts.includeRevoked) q.set("includeRevoked", "true");
+  const qs = q.toString();
+  return apiFetch<{ projectRoleGrants: ApiProjectRoleGrant[] }>(`/project-role-grants${qs ? `?${qs}` : ""}`, { token });
+}
+export function createProjectRoleGrant(input: ProjectRoleGrantCreateInput, token: string): Promise<{ projectRoleGrant: ApiProjectRoleGrant }> {
+  return apiFetch<{ projectRoleGrant: ApiProjectRoleGrant }>("/project-role-grants", { method: "POST", body: input, token });
+}
+export function revokeProjectRoleGrant(id: string, token: string): Promise<{ projectRoleGrant: ApiProjectRoleGrant }> {
+  return apiFetch<{ projectRoleGrant: ApiProjectRoleGrant }>(`/project-role-grants/${id}/revoke`, { method: "POST", token });
+}
+
+/**
+ * `/roles` row shape (roles.ts). Unlike the fixtures' separate `Role` +
+ * `Permission` + `RolePermission` tables, apps/api nests each role's
+ * permission keys directly on the role (`permissions: string[]`) and has no
+ * standalone `/permissions` listing endpoint at all. lib/org-api.ts derives
+ * a Permission-catalog-shaped view from the union of every role's
+ * `permissions` for the roles & permissions screen — see that file's
+ * `buildPermissionCatalog` for the mechanics and its header comment for why
+ * that derivation is sound (builder_side_admin holds the full catalogue).
+ */
+export interface ApiRole {
+  id: string;
+  tenantId: string;
+  key: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+  requiresTwoFactor: boolean;
+  grantScope: "tenant" | "project";
+  permissions: string[];
+}
+
+export function listRoles(token: string): Promise<{ roles: ApiRole[] }> {
+  return apiFetch<{ roles: ApiRole[] }>("/roles", { token });
+}
+
+export interface ApiUserRole {
+  userId: string;
+  roleId: string;
+  grantedBy: string | null;
+  grantedAt: string;
+}
+
+/**
+ * There is deliberately no `listUserRoles`/`usersWithRole` call here: apps/api
+ * has no endpoint that lists a tenant's `user_roles` rows (who currently
+ * holds which tenant-wide role) — only assign (`POST /users/:userId/roles`)
+ * and unassign (`DELETE /users/:userId/roles/:roleId`), both of which need
+ * to already know a specific target user and role, not discover them. See
+ * the step 5 final report: this blocks the roles screen's tenant-wide
+ * "N holders" count and the employee detail screen's "tenant-wide roles"
+ * section, and is a genuine API gap, not something worked around here.
+ */
+export function assignUserRole(userId: string, roleId: string, token: string): Promise<{ userRole: ApiUserRole }> {
+  return apiFetch<{ userRole: ApiUserRole }>(`/users/${userId}/roles`, { method: "POST", body: { roleId }, token });
+}
+export function unassignUserRole(userId: string, roleId: string, token: string): Promise<{ userRole: { userId: string; roleId: string } }> {
+  return apiFetch<{ userRole: { userId: string; roleId: string } }>(`/users/${userId}/roles/${roleId}`, { method: "DELETE", token });
 }

@@ -22,7 +22,7 @@
 
 import { NextResponse } from "next/server";
 import { ApiClientError, login, signup, type SignupInput } from "@/lib/api-client";
-import { setSessionCookie } from "@/lib/session";
+import { setSessionCookie, setTenantCookie } from "@/lib/session";
 
 export async function POST(request: Request) {
   let body: Partial<SignupInput>;
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     try {
       const loginResult = await login({ subdomain, email, password });
       await setSessionCookie(loginResult.token, loginResult.expiresAt);
+      await setTenantCookie(loginResult.tenant, loginResult.expiresAt);
       return NextResponse.json(
         { tenant: signupResult.tenant, user: signupResult.user, sessionEstablished: true },
         { status: 201 },

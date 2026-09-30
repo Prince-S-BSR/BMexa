@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { BucketBadge } from "@/components/ui/badge";
 import { customersForTenant, followUpBucket, getUser, resolveTenant, STATUS_ORDER } from "@/lib/crm";
 import type { InquiryStatus } from "@/lib/fixtures/types";
+import { requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Pipeline" };
 
@@ -26,6 +27,9 @@ const columnDot: Record<InquiryStatus, string> = {
 };
 
 export default async function PipelinePage(props: PageProps<"/pipeline">) {
+  // Auth gate only (Beads issue Final-Verison-224, step 5/5); this screen
+  // stays fixture-backed and otherwise untouched.
+  await requireSession();
   const sp = await props.searchParams;
   const tenant = resolveTenant(sp.tenant);
   const all = customersForTenant(tenant.id);

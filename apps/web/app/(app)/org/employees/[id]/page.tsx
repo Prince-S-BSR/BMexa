@@ -1,16 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, CornerDownRight, KeyRound, Network } from "lucide-react";
+import { ChevronLeft, CornerDownRight, Network } from "lucide-react";
 import { EmployeeLink } from "@/components/org/employee-link";
 import { ProjectRoleBadge, UserStatusBadge } from "@/components/org/role-badges";
 import { Avatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { getTenant } from "@/lib/crm";
-import type { ReportNode } from "@/lib/org";
 import {
   employeeName,
-  employeeUser,
   flattenReports,
   getDepartment,
   getDesignation,
@@ -20,20 +16,26 @@ import {
   grantHistoryForEmployee,
   isActive,
   liveGrantsForEmployee,
+  loadOrgSnapshot,
   managerChain,
   projectsForTenant,
   reportsTree,
-  tenantRoleGrantsForUser,
-} from "@/lib/org";
+  type OrgSnapshot,
+  type ReportNode,
+} from "@/lib/org-api";
 import { formatDate } from "@/lib/format";
+import { getSessionTenant, requireSession } from "@/lib/session";
 
 export async function generateMetadata(props: PageProps<"/org/employees/[id]">): Promise<Metadata> {
   const { id } = await props.params;
-  const e = getEmployee(id);
-  return { title: e ? employeeName(e) : "Employee" };
+  // Metadata can't call requireSession()'s redirect (Next runs generateMetadata
+  // in parallel with the page and a redirect there isn't supported the same
+  // way); a lightweight, non-redirecting fallback title is fine here — the
+  // page component below still enforces the real gate before rendering.
+  return { title: id ? "Employee" : "Employee" };
 }
 
-function ReportsList({ nodes }: { nodes: ReportNode[] }) {
+function ReportsList({ snapshot, nodes }: { snapshot: OrgSnapshot; nodes: ReportNode[] }) {
   return (
     <ul className="flex flex-col">
       {nodes.map((n) => (
@@ -44,11 +46,16 @@ function ReportsList({ nodes }: { nodes: ReportNode[] }) {
           >
             <span className="flex min-w-0 items-center gap-1.5">
               {n.depth > 1 && <CornerDownRight aria-hidden="true" className="size-3.5 shrink-0 text-fg-3" />}
-              <EmployeeLink employee={n.employee} muted={!isActive(n.employee)} />
+              <EmployeeLink
+                employeeId={n.employee.id}
+                name={employeeName(n.employee)}
+                designation={getDesignation(snapshot, n.employee.designationId)?.label}
+                muted={!isActive(n.employee)}
+              />
             </span>
             <span className="shrink-0 text-xs text-fg-3">{n.depth === 1 ? "Direct" : "Indirect"}</span>
           </div>
-          {n.children.length > 0 && <ReportsList nodes={n.children} />}
+          {n.children.length > 0 && <ReportsList snapshot={snapshot} nodes={n.children} />}
         </li>
       ))}
     </ul>
@@ -56,34 +63,33 @@ function ReportsList({ nodes }: { nodes: ReportNode[] }) {
 }
 
 export default async function EmployeeDetailPage(props: PageProps<"/org/employees/[id]">) {
+  const token = await requireSession();
   const { id } = await props.params;
-  const employee = getEmployee(id);
+
+  const [snapshot, tenant] = await Promise.all([loadOrgSnapshot(token), getSessionTenant()]);
+  const employee = getEmployee(snapshot, id);
   if (!employee) notFound();
 
-  const tenant = getTenant(employee.tenantId)!;
-  const user = employeeUser(employee);
-  const name = user.name;
-  const designation = getDesignation(employee.designationId);
-  const department = getDepartment(employee.departmentId);
+  const name = employeeName(employee);
+  const designation = getDesignation(snapshot, employee.designationId);
+  const department = getDepartment(snapshot, employee.departmentId);
+  const tenantLabel = tenant?.subdomain ?? "your organization";
 
-  const chain = managerChain(employee); // nearest first
-  const tree = reportsTree(employee);
+  const chain = managerChain(snapshot, employee); // nearest first
+  const tree = reportsTree(snapshot, employee);
   const allReports = flattenReports(tree);
   const directCount = tree.length;
   const indirectCount = allReports.length - directCount;
 
-  const liveGrants = liveGrantsForEmployee(employee.id);
-  const history = grantHistoryForEmployee(employee.id);
+  const liveGrants = liveGrantsForEmployee(snapshot, employee.id);
+  const history = grantHistoryForEmployee(snapshot, employee.id);
   const revoked = history.filter((g) => g.revokedAt !== null);
-  const projectsHeld = projectsForTenant(tenant.id).filter((p) => liveGrants.some((g) => g.projectId === p.id));
-  const tenantRoles = tenantRoleGrantsForUser(user.id)
-    .map((g) => getRole(g.roleId)!)
-    .sort((a, b) => (a.key === "builder_side_admin" ? -1 : b.key === "builder_side_admin" ? 1 : a.name.localeCompare(b.name)));
+  const projectsHeld = projectsForTenant(snapshot).filter((p) => liveGrants.some((g) => g.projectId === p.id));
 
   return (
     <div className="flex flex-col gap-5">
       <nav aria-label="Breadcrumb" className="-mt-1">
-        <Link href={`/org/employees?tenant=${tenant.id}`} className="inline-flex h-8 items-center gap-1 rounded-md pr-2 text-sm text-fg-2 hover:text-fg">
+        <Link href="/org/employees" className="inline-flex h-8 items-center gap-1 rounded-md pr-2 text-sm text-fg-2 hover:text-fg">
           <ChevronLeft aria-hidden="true" className="size-4" />
           Employees
         </Link>
@@ -97,23 +103,18 @@ export default async function EmployeeDetailPage(props: PageProps<"/org/employee
               <h1 className="truncate text-xl font-semibold tracking-tight">{name}</h1>
               <p className="text-sm text-fg-2">
                 {designation?.label ?? "No designation"}
-                {department ? ` · ${department.label}` : ""} · {tenant.name}
+                {department ? ` · ${department.label}` : ""} · {tenantLabel}
               </p>
               <p className="mt-0.5 truncate text-xs text-fg-3">
-                <a href={`mailto:${user.email}`} className="hover:underline">
-                  {user.email}
+                <a href={`mailto:${employee.userEmail}`} className="hover:underline">
+                  {employee.userEmail}
                 </a>{" "}
                 · employee since {formatDate(employee.createdAt, true)}
               </p>
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-            <UserStatusBadge status={user.status} />
-            {tenantRoles.map((r) => (
-              <Badge key={r.id} tone={r.key === "builder_side_admin" ? "accent" : "neutral"} solid={r.key === "builder_side_admin"} title={r.description ?? undefined}>
-                {r.name}
-              </Badge>
-            ))}
+            <UserStatusBadge status={employee.userStatus} />
           </div>
         </div>
       </header>
@@ -143,7 +144,12 @@ export default async function EmployeeDetailPage(props: PageProps<"/org/employee
                         aria-hidden="true"
                         className={`absolute top-1/2 left-1 size-[7px] -translate-y-1/2 rounded-full ${isDirect ? "bg-accent" : "bg-border-strong"}`}
                       />
-                      <EmployeeLink employee={m} muted={!isActive(m)} />
+                      <EmployeeLink
+                        employeeId={m.id}
+                        name={employeeName(m)}
+                        designation={getDesignation(snapshot, m.designationId)?.label}
+                        muted={!isActive(m)}
+                      />
                       <span className={`shrink-0 text-xs ${isDirect ? "font-medium text-accent-soft-fg" : "text-fg-3"}`}>
                         {isDirect ? "Direct manager" : "Indirect"}
                       </span>
@@ -175,10 +181,10 @@ export default async function EmployeeDetailPage(props: PageProps<"/org/employee
               </span>
             </div>
             {allReports.length === 0 ? (
-              <p className="mt-3 text-sm text-fg-2">Nobody reports to {name.split(" ")[0]}.</p>
+              <p className="mt-3 text-sm text-fg-2">Nobody reports to {name.split("@")[0]}.</p>
             ) : (
               <div className="mt-2">
-                <ReportsList nodes={tree} />
+                <ReportsList snapshot={snapshot} nodes={tree} />
               </div>
             )}
           </section>
@@ -208,7 +214,7 @@ export default async function EmployeeDetailPage(props: PageProps<"/org/employee
                       </div>
                       <span className="flex shrink-0 flex-wrap justify-end gap-1">
                         {here.map((g) => (
-                          <ProjectRoleBadge key={g.id} role={getRole(g.roleId)!} />
+                          <ProjectRoleBadge key={g.id} role={getRole(snapshot, g.roleId)!} />
                         ))}
                       </span>
                     </li>
@@ -218,7 +224,7 @@ export default async function EmployeeDetailPage(props: PageProps<"/org/employee
             )}
             <p className="mt-3 border-t border-border pt-2.5 text-xs text-fg-3">
               Roles are assigned per project, independently of designation. Either, both or neither may be held on each project.{" "}
-              <Link href={`/org/project-roles?tenant=${tenant.id}`} className="font-medium text-accent hover:underline">
+              <Link href="/org/project-roles" className="font-medium text-accent hover:underline">
                 Open the grid
               </Link>
             </p>
@@ -233,13 +239,13 @@ export default async function EmployeeDetailPage(props: PageProps<"/org/employee
                 {revoked.map((g) => (
                   <li key={g.id} className="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0 text-fg-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm">{getProject(g.projectId)!.name}</p>
+                      <p className="truncate text-sm">{getProject(snapshot, g.projectId)!.name}</p>
                       <p className="text-xs text-fg-3">
                         {formatDate(g.grantedAt, true)} – {formatDate(g.revokedAt!, true)}
                       </p>
                     </div>
                     <span className="shrink-0 opacity-60">
-                      <ProjectRoleBadge role={getRole(g.roleId)!} />
+                      <ProjectRoleBadge role={getRole(snapshot, g.roleId)!} />
                     </span>
                   </li>
                 ))}
@@ -249,26 +255,20 @@ export default async function EmployeeDetailPage(props: PageProps<"/org/employee
           )}
 
           <section aria-labelledby="tr-h" className="card p-4">
-            <h2 id="tr-h" className="flex items-center gap-2 text-sm font-semibold">
-              <KeyRound aria-hidden="true" className="size-4 text-fg-3" />
+            <h2 id="tr-h" className="text-sm font-semibold">
               Tenant-wide roles
             </h2>
-            {tenantRoles.length === 0 ? (
-              <p className="mt-3 text-sm text-fg-2">No tenant-wide roles.</p>
-            ) : (
-              <ul className="mt-3 flex flex-col divide-y divide-border">
-                {tenantRoles.map((r) => (
-                  <li key={r.id} className="py-2.5 first:pt-0 last:pb-0">
-                    <p className="text-sm font-medium">{r.name}</p>
-                    {r.description && <p className="text-xs text-fg-2">{r.description}</p>}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-3 border-t border-border pt-2.5 text-xs text-fg-3">
-              <Link href={`/org/roles?tenant=${tenant.id}`} className="font-medium text-accent hover:underline">
-                See what each role can do
-              </Link>
+            {/*
+              GAP (see lib/org-api.ts's file header, item #2): apps/api has
+              no endpoint that lists which tenant-wide roles (owner, admin,
+              manager, member, read_only, builder_side_admin) a given user
+              currently holds — only POST/DELETE /users/:userId/roles, which
+              assume the caller already knows the answer. This section
+              cannot be filled from the real API without one; flagged in the
+              step 5 final report rather than fabricated here.
+            */}
+            <p className="mt-3 text-sm text-fg-2">
+              Not shown: the current API has no endpoint to look up which tenant-wide roles a user holds (see the step 5 report).
             </p>
           </section>
         </aside>

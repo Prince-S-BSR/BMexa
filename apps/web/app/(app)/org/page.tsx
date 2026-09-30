@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
-import { resolveTenant } from "@/lib/crm";
+import { requireSession } from "@/lib/session";
 
-export default async function OrgIndexPage(props: PageProps<"/org">) {
-  const sp = await props.searchParams;
-  const tenant = resolveTenant(sp.tenant);
-  redirect(`/org/employees?tenant=${tenant.id}`);
+export default async function OrgIndexPage() {
+  // Auth gate (Beads issue Final-Verison-224, step 5/5). There is no more
+  // `?tenant=` to preserve on the redirect — real Org data is scoped to the
+  // session's own tenant, not a fixture browsed by id (see lib/org-api.ts's
+  // file header).
+  await requireSession();
+  redirect("/org/employees");
 }

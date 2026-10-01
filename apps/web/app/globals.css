@@ -1,0 +1,208 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   BMexa design tokens
+   Brand (Master Spec §59): Deep Emerald #0A3121, Golden Amber #E2981F.
+   Role discipline: neutrals do the work; emerald is the one accent
+   (actions, selection, "Booked"); amber is reserved for the "Today"
+   follow-up bucket; red = urgent/negative; blue = in-flight.
+   ------------------------------------------------------------------ */
+:root {
+  color-scheme: light;
+
+  /* structural */
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --surface-2: #f1efea;
+  --surface-3: #e8e5df;
+  --border: #e3e0d9;
+  --border-strong: #cfcac1;
+  --fg: #1a1a17;
+  --fg-2: #5b5a54;
+  --fg-3: #8a887f;
+
+  /* accent: deep emerald */
+  --accent: #0a3121;
+  --accent-hover: #0f4630;
+  --accent-fg: #ffffff;
+  --accent-soft: #e4efe8;
+  --accent-soft-fg: #0a3121;
+
+  /* semantic */
+  --danger: #b3261e;
+  --danger-soft: #fbe9e7;
+  --danger-soft-fg: #8f1d17;
+  --warn: #e2981f;
+  --warn-soft: #fdf1dc;
+  --warn-soft-fg: #7a4d05;
+  --success: #1b6b45;
+  --success-soft: #e0f1e7;
+  --success-soft-fg: #145236;
+  --info: #2a5c9e;
+  --info-soft: #e4ecf8;
+  --info-soft-fg: #1f477b;
+  --neutral-soft: #ecebe6;
+  --neutral-soft-fg: #55534d;
+
+  --ring: #0a3121;
+  --shadow-1: 0 1px 2px rgba(20, 24, 20, 0.06), 0 1px 1px rgba(20, 24, 20, 0.04);
+  --shadow-2: 0 6px 20px -8px rgba(20, 24, 20, 0.25), 0 2px 6px -2px rgba(20, 24, 20, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #131412;
+    --surface: #1b1c19;
+    --surface-2: #22241f;
+    --surface-3: #2b2d27;
+    --border: #2d2f29;
+    --border-strong: #41443c;
+    --fg: #ecebe6;
+    --fg-2: #b3b1a8;
+    --fg-3: #7f7d75;
+
+    --accent: #58b58a;
+    --accent-hover: #6cc79c;
+    --accent-fg: #06170f;
+    --accent-soft: #163526;
+    --accent-soft-fg: #9fdcbd;
+
+    --danger: #ef7a72;
+    --danger-soft: #3a1f1d;
+    --danger-soft-fg: #f4a29c;
+    --warn: #e2981f;
+    --warn-soft: #3a2c12;
+    --warn-soft-fg: #f2c470;
+    --success: #58b58a;
+    --success-soft: #163526;
+    --success-soft-fg: #9fdcbd;
+    --info: #7ea8e6;
+    --info-soft: #1c2b42;
+    --info-soft-fg: #a9c5f0;
+    --neutral-soft: #2a2c27;
+    --neutral-soft-fg: #b3b1a8;
+
+    --ring: #58b58a;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 10px 28px -10px rgba(0, 0, 0, 0.7);
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-fg: var(--accent-soft-fg);
+
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-soft-fg: var(--danger-soft-fg);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-soft-fg: var(--warn-soft-fg);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-soft-fg: var(--success-soft-fg);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-soft-fg: var(--info-soft-fg);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-neutral-soft-fg: var(--neutral-soft-fg);
+
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* type scale: 1.2 ratio on a 14px base (dense product UI) */
+  --text-xs: 0.75rem; /* 12 */
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem; /* 14 */
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1.0625rem; /* 17 */
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.25rem; /* 20 */
+  --text-lg--line-height: 1.6rem;
+  --text-xl: 1.5rem; /* 24 */
+  --text-xl--line-height: 1.85rem;
+
+  --shadow-1: var(--shadow-1);
+  --shadow-2: var(--shadow-2);
+}
+
+@layer base {
+  html {
+    height: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--accent-soft-fg);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  select {
+    color: var(--fg);
+    background: var(--surface);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    box-shadow: var(--shadow-1);
+  }
+}
